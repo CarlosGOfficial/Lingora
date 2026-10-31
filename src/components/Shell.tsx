@@ -1,0 +1,99 @@
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useWallet } from '../shop/useWallet'
+import { ThemeMenu } from '../theme/ThemeMenu'
+import { APP_NAME } from '../config'
+import { COURSES, LANG_CODES } from '../content'
+import { dueCards, liveStreak, todayXp, useStore } from '../store/useStore'
+import { Icon, type IconName } from './Icon'
+
+const NAV: { to: string; label: string; icon: IconName }[] = [
+  { to: '/', label: 'Learn', icon: 'home' },
+  { to: '/review', label: 'Review', icon: 'layers' },
+  { to: '/practice', label: 'Practice', icon: 'mic' },
+  { to: '/friends', label: 'Friends', icon: 'users' },
+  { to: '/shop', label: 'Shop', icon: 'bag' },
+  { to: '/profile', label: 'Profile', icon: 'user' },
+]
+
+export function Shell() {
+  const { activeLang, setActiveLang, progress, streak, xpByDay, dailyGoal } = useStore()
+  const due = dueCards(progress[activeLang]).length
+  const xp = todayXp(xpByDay)
+  const s = liveStreak(streak)
+  const { coins } = useWallet()
+  const location = useLocation()
+
+  return (
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <span className="brand-mark">L</span>
+          <span>
+            {APP_NAME.slice(0, 3)}
+            <span className="hero-gradient">{APP_NAME.slice(3)}</span>
+          </span>
+        </div>
+        <nav>
+          {NAV.map((n) => (
+            <NavLink key={n.to} to={n.to} end={n.to === '/'} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <Icon name={n.icon} />
+              <span>{n.label}</span>
+              {n.to === '/review' && due > 0 && <span className="badge">{due}</span>}
+            </NavLink>
+          ))}
+        </nav>
+      </aside>
+
+      <div className="main-col">
+        <header className="topbar">
+          <div className="lang-switch" role="tablist" aria-label="Course">
+            {LANG_CODES.map((code) => (
+              <button
+                key={code}
+                role="tab"
+                aria-selected={code === activeLang}
+                className={`lang-chip lang-${code} ${code === activeLang ? 'active' : ''}`}
+                onClick={() => setActiveLang(code)}
+                title={COURSES[code].name}
+              >
+                <span lang={COURSES[code].bcp47}>{COURSES[code].badge}</span>
+              </button>
+            ))}
+          </div>
+          <div className="topbar-stats">
+            <span className={`topstat ${xp > 0 ? 'flame-on' : 'flame-off'}`} title="Day streak">
+              <Icon name="flame" filled size={18} /> <span key={s} className="bump">{s}</span>
+            </span>
+            <span className={`topstat xp ${xp >= dailyGoal ? 'goal-met' : ''}`} title="XP today / daily goal">
+              <Icon name="bolt" filled size={18} /> <span key={xp} className="bump">{xp}</span>/{dailyGoal}
+            </span>
+            {streak.freezes > 0 && (
+              <span className="topstat freeze" title="Streak freezes">
+                <Icon name="snow" size={18} /> {streak.freezes}
+              </span>
+            )}
+            <Link to="/shop" className="topstat coin-stat" title="Coins — open the shop">
+              <Icon name="coin" size={18} /> <span key={coins} className="bump">{coins.toLocaleString()}</span>
+            </Link>
+            <ThemeMenu />
+          </div>
+        </header>
+        <main className="page">
+          <div key={location.pathname} className="page-anim">
+            <Outlet />
+          </div>
+        </main>
+      </div>
+
+      <nav className="tabbar">
+        {NAV.map((n) => (
+          <NavLink key={n.to} to={n.to} end={n.to === '/'} className={({ isActive }) => `tab ${isActive ? 'active' : ''}`}>
+            <Icon name={n.icon} />
+            <span>{n.label}</span>
+            {n.to === '/review' && due > 0 && <span className="badge">{due}</span>}
+          </NavLink>
+        ))}
+      </nav>
+    </div>
+  )
+}

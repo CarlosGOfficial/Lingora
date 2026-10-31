@@ -1,0 +1,161 @@
+import { LANG_CODES } from '../content'
+import type { LangCode } from '../content/types'
+import { dayKey } from '../lib/date'
+import { useStore, type Appearance } from '../store/useStore'
+import { isCustomTheme } from '../theme/themes'
+import { ApiError, api } from './api'
+import { derive } from './derive'
+import { emptyOutbox, type Account, type Outbox, type Prefs } from './types'
+
+let inFlight: Promise<void> | null = null
+
+function localPrefs(): Prefs {
+  const s = useStore.getState()
+  return {
+    activeLang: s.activeLang,
+    languages: s.languages,
+    dailyGoal: s.dailyGoal,
+    settings: { ...s.settings },
+    appearance: { ...s.appearance } as unknown as Record<string, unknown>,
+  }
+}
+
+const pending = (o: Outbox) => o.reviews.length + o.xp.length + o.completions.length + o.imports.length + o.purchases.length + o.claims.length
+
+/** Push the outbox and replace local progress with the server's view. */
+export function syncNow(): Promise<void> {
+  if (inFlight) return inFlight
+  inFlight = (async () => {
+    const s = useStore.getState()
+    if (!s.account) return
+    const sent = s.outbox
+    try {
+      const snap = await api.sync({ outbox: sent, prefs: localPrefs() })
+      const sentIds = new Set([
+        ...sent.reviews.map((e) => e.id),
+        ...sent.xp.map((e) => e.id),
+        ...sent.completions.map((e) => e.refId),
+        ...sent.purchases.map((e) => e.id),
+        ...sent.claims.map((e) => `claim-${e.day}`),
+      ])
+      const current = useStore.getState().outbox
+      const remaining: Outbox = {
+        reviews: current.reviews.filter((e) => !sentIds.has(e.id)),
+        xp: current.xp.filter((e) => !sentIds.has(e.id)),
+        completions: current.completions.filter((e) => !sentIds.has(e.refId)),
+        imports: current.imports.filter((e) => !sent.imports.includes(e)),
+        purchases: current.purchases.filter((e) => !sentIds.has(e.id)),
+        claims: current.claims.filter((e) => !sentIds.has(`claim-${e.day}`)),
+      }
+      // Events recorded mid-request are already in local state; keep them on top of the snapshot.
+      const merged = {
+        ...snap,
+        reviews: [...snap.reviews, ...remaining.reviews],
+        completions: [...snap.completions, ...remaining.completions],
+        xp: [...snap.xp, ...remaining.xp.map((e) => ({ lang: e.lang, day: e.day, xp: e.xp }))],
+        purchases: [...snap.purchases, ...remaining.purchases],
+        claims: [...snap.claims, ...remaining.claims.filter((c) => !snap.claims.some((x) => x.day === c.day))],
+      }
+      useStore.setState({
+        ...derive(merged, dayKey()),
+        account: snap.account,
+        name: snap.account.username,
+        outbox: remaining,
+        lastSyncedAt: Date.now(),
+        syncError: null,
+      })
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) useStore.setState({ account: null, syncError: 'Signed out — please sign in again.' })
+      else useStore.setState({ syncError: (e as Error).message })
+    }
+  })().finally(() => {
+    inFlight = null
+  })
+  return inFlight
+}
+
+/** Package progress made before signing in so it merges into the account. */
+function importLocalProgress(): Outbox {
+  const s = useStore.getState()
+  const out = emptyOutbox()
+  for (const lang of LANG_CODES) {
+    const p = s.progress[lang]
+    for (const card of Object.values(p.cards)) {
+      const { itemId, ...state } = card
+      out.imports.push({ itemId, lang, state })
+    }
+    for (const refId of p.completedLessons) out.completions.push({ refId, lang, kind: 'lesson', at: Date.now() })
+    for (const refId of p.completedReadings) out.completions.push({ refId, lang, kind: 'reading', at: Date.now() })
+  }
+  // Daily XP isn't split by language locally, so it's credited to the active course.
+  for (const [day, xp] of Object.entries(s.xpByDay)) {
+    if (xp > 0) out.xp.push({ id: `import-${s.deviceId}-${day}`, lang: s.activeLang, xp: Math.min(xp, 1000), day, at: Date.now() })
+  }
+  out.purchases.push(...s.shop.purchases)
+  out.claims.push(...s.shop.claims)
+  return out
+}
+
+async function afterAuth(acct: Account, adoptServerPrefs: boolean) {
+  const p = acct.prefs
+  const s = useStore.getState()
+  const patch: Partial<ReturnType<typeof useStore.getState>> = {
+    account: acct,
+    name: acct.username,
+    outbox: importLocalProgress(),
+    onboarded: true,
+  }
+  if (adoptServerPrefs && p.activeLang && LANG_CODES.includes(p.activeLang)) {
+    patch.activeLang = p.activeLang
+    patch.languages = (p.languages ?? [p.activeLang]).filter((l): l is LangCode => LANG_CODES.includes(l))
+    if (typeof p.dailyGoal === 'number') patch.dailyGoal = p.dailyGoal
+    if (p.settings) patch.settings = { ...s.settings, ...p.settings }
+    const a = p.appearance as Partial<Appearance> | undefined
+    if (a) {
+      patch.appearance = {
+        theme: typeof a.theme === 'string' ? a.theme : s.appearance.theme,
+        custom: isCustomTheme(a.custom) ? a.custom : s.appearance.custom,
+        equipped: { ...s.appearance.equipped, ...(a.equipped ?? {}) },
+      }
+    }
+  }
+  useStore.setState(patch)
+  await syncNow()
+}
+
+export async function signUp(username: string, password: string) {
+  await afterAuth(await api.signup({ username, password }), false)
+}
+
+export async function logIn(username: string, password: string) {
+  await afterAuth(await api.login({ username, password }), true)
+}
+
+/** Signing out clears this device so the next person starts fresh. */
+export async function logOut() {
+  await syncNow()
+  await api.logout().catch(() => {})
+  useStore.getState().resetAll()
+}
+
+/** Sync on load, shortly after new activity, and when the tab regains focus. */
+export function startAutoSync(): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const schedule = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => void syncNow(), 1500)
+  }
+  if (useStore.getState().account) void syncNow()
+  const unsub = useStore.subscribe((s, prev) => {
+    const changed = s.outbox !== prev.outbox && pending(s.outbox) > 0
+    const prefsChanged = s.appearance !== prev.appearance || s.settings !== prev.settings || s.activeLang !== prev.activeLang || s.dailyGoal !== prev.dailyGoal
+    if (s.account && (changed || prefsChanged)) schedule()
+  })
+  const onFocus = () => useStore.getState().account && void syncNow()
+  window.addEventListener('focus', onFocus)
+  return () => {
+    clearTimeout(timer)
+    unsub()
+    window.removeEventListener('focus', onFocus)
+  }
+}

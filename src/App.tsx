@@ -1,0 +1,72 @@
+import { Fragment, useEffect, type ReactNode } from 'react'
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
+import { Shell } from './components/Shell'
+import { FriendsPage } from './screens/FriendsPage'
+import { GuidebookPage } from './screens/GuidebookPage'
+import { Home } from './screens/Home'
+import { LessonPage } from './screens/LessonPage'
+import { Onboarding } from './screens/Onboarding'
+import { PracticePage } from './screens/PracticePage'
+import { PracticeSession } from './screens/PracticeSession'
+import { ProfilePage } from './screens/ProfilePage'
+import { ReadingPage } from './screens/ReadingPage'
+import { ReviewPage } from './screens/ReviewPage'
+import { ShopPage } from './screens/ShopPage'
+import { ThemeStudioPage } from './screens/ThemeStudioPage'
+import { ThemeApplier } from './theme/ThemeApplier'
+import { useStore } from './store/useStore'
+import { startAutoSync } from './sync/sync'
+
+/** Session screens hold state; give each lesson/story/mode a fresh instance. */
+function Remount({ param, children }: { param: string; children: ReactNode }) {
+  return <Fragment key={useParams()[param]}>{children}</Fragment>
+}
+
+export function App() {
+  const onboarded = useStore((s) => s.onboarded)
+  const activeLang = useStore((s) => s.activeLang)
+  const reconcileStreak = useStore((s) => s.reconcileStreak)
+
+  useEffect(() => {
+    reconcileStreak()
+    const onFocus = () => reconcileStreak()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [reconcileStreak])
+
+  useEffect(() => {
+    document.documentElement.dataset.lang = activeLang
+  }, [activeLang])
+
+  useEffect(() => startAutoSync(), [])
+
+  if (!onboarded)
+    return (
+      <>
+        <ThemeApplier />
+        <Onboarding />
+      </>
+    )
+
+  return (
+    <BrowserRouter>
+      <ThemeApplier />
+      <Routes>
+        <Route path="/lesson/:lessonId" element={<Remount param="lessonId"><LessonPage /></Remount>} />
+        <Route path="/reading/:readingId" element={<Remount param="readingId"><ReadingPage /></Remount>} />
+        <Route path="/practice/:mode" element={<Remount param="mode"><PracticeSession /></Remount>} />
+        <Route element={<Shell />}>
+          <Route index element={<Home />} />
+          <Route path="/review" element={<ReviewPage />} />
+          <Route path="/practice" element={<PracticePage />} />
+          <Route path="/friends" element={<FriendsPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/guide/:unitId" element={<GuidebookPage />} />
+          <Route path="/shop" element={<ShopPage />} />
+          <Route path="/themes" element={<ThemeStudioPage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}
