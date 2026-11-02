@@ -1,0 +1,19 @@
+# Render Blueprint: one web service serves the API (/api) and the built frontend.
+# In Render: New → Blueprint → pick this repo. DATABASE_URL is asked for on first deploy
+# (use the same Neon connection string as Wordle Unlimited).
+services:
+  - type: web
+    name: lingora
+    runtime: node
+    plan: free
+    # Dev packages (Vite, TypeScript) are needed to build, even if NODE_ENV=production.
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false

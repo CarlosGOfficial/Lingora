@@ -7,6 +7,9 @@ import { DATABASE_URL, IS_PROD, PORT } from './env'
 const root = new Hono()
 root.route('/', app)
 
+// Unknown API addresses get a JSON 404 instead of falling through to the web page.
+root.all('/api/*', (c) => c.json({ error: 'Not found' }, 404))
+
 // In production one process serves both the API and the built frontend.
 if (IS_PROD) {
   root.use('*', serveStatic({ root: './dist' }))
