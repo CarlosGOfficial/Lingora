@@ -53,7 +53,7 @@ interface RecognitionLike {
   start(): void
   stop(): void
   abort(): void
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null
   onerror: ((e: { error: string }) => void) | null
   onend: (() => void) | null
 }
@@ -75,34 +75,68 @@ export interface Listening {
   stop(): void
 }
 
-/** Starts listening once; resolves with alternative transcripts (best first). */
-export function listen(lang: string): Listening {
+/** Friendly messages for the recognition error codes browsers report. */
+export function recognitionErrorMessage(code: string): string {
+  switch (code) {
+    case 'not-allowed':
+    case 'service-not-allowed':
+      return 'Microphone access is blocked. Allow it in your browser’s site settings, then try again.'
+    case 'audio-capture':
+      return 'No microphone was found. Plug one in or check your sound settings.'
+    case 'no-speech':
+      return 'I didn’t hear anything — tap the mic and speak a little louder.'
+    case 'network':
+      return 'Speech recognition needs an internet connection. Check your connection and try again.'
+    case 'language-not-supported':
+      return 'Your browser can’t recognise this language. Try Chrome or Edge.'
+    default:
+      return 'Something went wrong with the microphone — try again.'
+  }
+}
+
+const MAX_LISTEN_MS = 10_000
+
+/**
+ * Listens for one phrase. Partial words are reported live through `onInterim`;
+ * the promise resolves with alternative final transcripts (best first).
+ */
+export function listen(lang: string, onInterim?: (text: string) => void): Listening {
   const Ctor = recognitionCtor()
   if (!Ctor) return { result: Promise.reject(new Error('unsupported')), stop() {} }
   const rec = new Ctor()
   rec.lang = lang
-  rec.interimResults = false
+  rec.interimResults = true
   rec.maxAlternatives = 5
   rec.continuous = false
+  let timer: ReturnType<typeof setTimeout> | undefined
   const result = new Promise<string[]>((resolve, reject) => {
-    let done = false
+    let finals: string[] = []
+    let interim = ''
     rec.onresult = (e) => {
-      done = true
+      const live: string[] = []
       const alts: string[] = []
       for (let i = 0; i < e.results.length; i++) {
         const r = e.results[i]
-        for (let j = 0; j < r.length; j++) alts.push(r[j].transcript)
+        live.push(r[0].transcript)
+        if (r.isFinal) for (let j = 0; j < r.length; j++) alts.push(r[j].transcript)
       }
-      resolve(alts)
+      interim = live.join('')
+      if (alts.length) finals = alts
+      onInterim?.(interim)
     }
     rec.onerror = (e) => {
-      done = true
-      reject(new Error(e.error))
+      clearTimeout(timer)
+      // Stopping by hand reports "aborted"; treat it like a normal end.
+      if (e.error === 'aborted') resolve(finals.length ? finals : interim ? [interim] : [])
+      else reject(new Error(e.error))
     }
     rec.onend = () => {
-      if (!done) resolve([])
+      clearTimeout(timer)
+      resolve(finals.length ? finals : interim ? [interim] : [])
     }
   })
   rec.start()
+  // Some browsers never end on their own if there's background noise.
+  timer = setTimeout(() => rec.stop(), MAX_LISTEN_MS)
   return { result, stop: () => rec.stop() }
 }

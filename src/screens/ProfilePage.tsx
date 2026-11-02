@@ -46,7 +46,8 @@ export function ProfilePage() {
           <div className="grow">
             <NameTag name={s.account.username} {...cosmeticsOf(s.appearance.equipped)} />
             <div className="muted small">
-              Level {levelFromXp(totalXp)} · <Link to="/shop">change your look in the shop</Link>
+              Level {levelFromXp(totalXp)} · <Link to={`/u/${encodeURIComponent(s.account.id)}`}>view your public profile</Link> ·{' '}
+              <Link to="/shop">change your look in the shop</Link>
             </div>
           </div>
         ) : (
@@ -98,7 +99,10 @@ export function ProfilePage() {
           {LANG_CODES.map((code) => {
             const c = COURSES[code]
             const p = s.progress[code]
-            const total = allLessons(c).length
+            const lessonIds = allLessons(c).map((x) => x.lesson.id)
+            const total = lessonIds.length
+            // Unit reviews are stored as completions too; count real lessons only.
+            const doneLessons = p.completedLessons.filter((id) => lessonIds.includes(id)).length
             const learned = Object.values(p.cards).filter(isLearned).length
             return (
               <div key={code} className="course-row">
@@ -108,10 +112,10 @@ export function ProfilePage() {
                 <div className="grow">
                   <strong>{c.name}</strong>
                   <div className="muted small">
-                    {c.standard} · {p.completedLessons.length}/{total} lessons · {learned} items learned · {p.xp} XP
+                    {c.standard} · {doneLessons}/{total} lessons · {learned} items learned · {p.xp} XP
                   </div>
                   <div className="progress thin">
-                    <div style={{ width: `${(p.completedLessons.length / total) * 100}%` }} />
+                    <div style={{ width: `${(doneLessons / total) * 100}%` }} />
                   </div>
                 </div>
               </div>

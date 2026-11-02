@@ -1,6 +1,8 @@
 import { Fragment, useEffect, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
 import { Shell } from './components/Shell'
+import { ConversationPage } from './screens/ConversationPage'
+import { FriendChatPage, GroupChatPage, NewGroupPage } from './screens/FriendChatPage'
 import { FriendsPage } from './screens/FriendsPage'
 import { GuidebookPage } from './screens/GuidebookPage'
 import { Home } from './screens/Home'
@@ -13,8 +15,13 @@ import { ReadingPage } from './screens/ReadingPage'
 import { ReviewPage } from './screens/ReviewPage'
 import { ShopPage } from './screens/ShopPage'
 import { ThemeStudioPage } from './screens/ThemeStudioPage'
+import { UnitReviewPage } from './screens/UnitReviewPage'
+import { UserProfilePage } from './screens/UserProfilePage'
 import { ThemeApplier } from './theme/ThemeApplier'
 import { useStore } from './store/useStore'
+import { NotificationsWatcher } from './social/NotificationsWatcher'
+import { usePresence } from './social/useFriends'
+import { Toaster } from './components/Toaster'
 import { startAutoSync } from './sync/sync'
 
 /** Session screens hold state; give each lesson/story/mode a fresh instance. */
@@ -39,6 +46,7 @@ export function App() {
   }, [activeLang])
 
   useEffect(() => startAutoSync(), [])
+  usePresence()
 
   if (!onboarded)
     return (
@@ -51,15 +59,23 @@ export function App() {
   return (
     <BrowserRouter>
       <ThemeApplier />
+      <NotificationsWatcher />
+      <Toaster />
       <Routes>
         <Route path="/lesson/:lessonId" element={<Remount param="lessonId"><LessonPage /></Remount>} />
         <Route path="/reading/:readingId" element={<Remount param="readingId"><ReadingPage /></Remount>} />
+        <Route path="/unit-review/:unitId" element={<Remount param="unitId"><UnitReviewPage /></Remount>} />
+        <Route path="/conversation" element={<ConversationPage />} />
         <Route path="/practice/:mode" element={<Remount param="mode"><PracticeSession /></Remount>} />
         <Route element={<Shell />}>
           <Route index element={<Home />} />
           <Route path="/review" element={<ReviewPage />} />
           <Route path="/practice" element={<PracticePage />} />
           <Route path="/friends" element={<FriendsPage />} />
+          <Route path="/friends/chat/:userId" element={<FriendChatPage />} />
+          <Route path="/friends/group/:groupId" element={<GroupChatPage />} />
+          <Route path="/friends/groups/new" element={<NewGroupPage />} />
+          <Route path="/u/:key" element={<UserProfilePage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/guide/:unitId" element={<GuidebookPage />} />
           <Route path="/shop" element={<ShopPage />} />

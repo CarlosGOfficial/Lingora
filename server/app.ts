@@ -1,21 +1,20 @@
 import { Hono, type Context } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
-import { createMiddleware } from 'hono/factory'
 import { HTTPException } from 'hono/http-exception'
 import type { LangCode } from '../src/content/types'
-import { dayKey, daysBetween, weekStart } from '../src/lib/date'
 import { DAILY_REWARDS, SHOP_ITEM_BY_ID, dailyReward, dayNumber, dealPrice } from '../src/shop/catalog'
 import { coinBalance } from '../src/shop/wallet'
-import { bump, emptyStreak, reconcile } from '../src/store/streak'
-import type { Account, LeaderboardRow, Outbox, Prefs, SavedTheme, Snapshot, SyncRequest } from '../src/sync/types'
+import type { Account, Outbox, Prefs, SavedTheme, Snapshot, SyncRequest } from '../src/sync/types'
 import { MAX_SAVED_THEMES, isCustomTheme } from '../src/theme/themes'
+import Anthropic from '@anthropic-ai/sdk'
+import type { ChatRequest } from '../src/chat/types'
 import { USERNAME_RE, hashPassword, hashToken, newSessionToken, verifyPassword } from './auth'
+import { chatEnabled, chatTurn, validateChat } from './chat'
 import { sql, type Sql } from './db'
 import { IS_PROD } from './env'
+import { SESSION_COOKIE, currentUserId, db, fail, rateLimit, requireUser, str, type Env } from './http'
+import { registerSocialRoutes } from './social'
 
-type Env = { Variables: { userId: string } }
-
-const SESSION_COOKIE = 'lg_sid'
 const SESSION_DAYS = 30
 const LANGS: LangCode[] = ['zh', 'ja', 'pt']
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -29,34 +28,6 @@ app.onError((err, c) => {
   return c.json({ error: 'Something went wrong on the server.' }, 500)
 })
 
-const fail = (status: 400 | 401 | 403 | 404 | 409 | 429 | 503, message: string): never => {
-  throw new HTTPException(status, { message })
-}
-
-function db(): Sql {
-  return sql ?? fail(503, 'The database isn’t configured yet.')
-}
-
-const str = (v: unknown) => (typeof v === 'string' ? v : '')
-
-/* ---------- In-memory rate limits ---------- */
-const hits = new Map<string, { n: number; reset: number }>()
-function rateLimit(c: Context, bucket: string, max: number, windowMs: number, message: string) {
-  const ip = c.req.header('x-forwarded-for')?.split(',')[0].trim() ?? 'local'
-  const key = `${bucket}:${ip}`
-  const now = Date.now()
-  const h = hits.get(key)
-  if (!h || h.reset < now) hits.set(key, { n: 1, reset: now + windowMs })
-  else if (++h.n > max) fail(429, message)
-}
-
-/* ---------- Wordle Unlimited's friends table is optional ---------- */
-let wordleFriends: boolean | null = null
-async function hasWordleFriends(s: Sql) {
-  if (wordleFriends === null) wordleFriends = !!(await s`select to_regclass('public.friendships') as t`)[0].t
-  return wordleFriends
-}
-
 /* ---------- Sessions ---------- */
 async function startSession(c: Context, userId: string) {
   const s = db()
@@ -69,14 +40,12 @@ async function startSession(c: Context, userId: string) {
   setCookie(c, SESSION_COOKIE, token, { httpOnly: true, sameSite: 'Lax', secure: IS_PROD, path: '/', maxAge: SESSION_DAYS * 86_400 })
 }
 
-const requireUser = createMiddleware<Env>(async (c, next) => {
-  const token = getCookie(c, SESSION_COOKIE)
-  if (!token) fail(401, 'Please sign in.')
-  const rows = await db()`select user_id from lingora_sessions where token_hash = ${hashToken(token!)} and expires_at > now()`
-  if (!rows.length) fail(401, 'Your session has expired. Please sign in again.')
-  c.set('userId', rows[0].user_id as string)
-  await next()
-})
+/** Admins are flagged in the shared users table, managed from Wordle Unlimited's admin console. */
+async function isAdmin(userId: string | null): Promise<boolean> {
+  if (!userId || !sql) return false
+  const rows = await sql`select is_admin from users where id = ${userId}`
+  return rows[0]?.is_admin === true
+}
 
 async function account(userId: string): Promise<Account> {
   const rows = await db()`select u.id, u.username, p.prefs from users u left join lingora_profiles p on p.user_id = u.id where u.id = ${userId}`
@@ -219,80 +188,8 @@ app.post('/sync', requireUser, async (c) => {
   return c.json(snapshot)
 })
 
-/* ---------- Friends ---------- */
-
-function cosmetics(prefs: Prefs | null) {
-  const eq = ((prefs?.appearance as { equipped?: Record<string, string> } | undefined)?.equipped ?? {}) as Record<string, string>
-  const title = SHOP_ITEM_BY_ID.get(eq.title)
-  const color = SHOP_ITEM_BY_ID.get(eq.nameColor)
-  return { title: title?.category === 'title' ? title.text ?? null : null, nameColor: color?.category === 'nameColor' ? color.color ?? null : null }
-}
-
-app.get('/friends', requireUser, async (c) => {
-  const uid = c.get('userId')
-  const q = c.req.query('today') ?? ''
-  const today = DAY_RE.test(q) ? q : dayKey()
-  const s = db()
-
-  const mine = (await s`select friend_id from lingora_friendships where user_id = ${uid}`).map((r) => r.friend_id as string)
-  // Accepted friends from Wordle Unlimited count too (read-only; managed in Wordle).
-  const fromWordle = (await hasWordleFriends(s))
-    ? (
-        await s`select case when requester_id = ${uid} then addressee_id else requester_id end as id
-          from friendships where status = 'accepted' and (requester_id = ${uid} or addressee_id = ${uid})`
-      ).map((r) => r.id as string)
-    : []
-  const ids = [...new Set([uid, ...mine, ...fromWordle])]
-  // Only people who have opened Lingora (they have a profile) are on the board.
-  const people = await s`select u.id, u.username, p.prefs from users u join lingora_profiles p on p.user_id = u.id where u.id = any(${ids}::text[])`
-  const days = await s`select user_id, to_char(day, 'YYYY-MM-DD') as day, sum(xp)::int as xp from lingora_xp_events
-    where user_id = any(${ids}::text[]) group by user_id, day order by day`
-
-  const start = weekStart(today)
-  const rows: LeaderboardRow[] = people.map((p) => {
-    const active = days.filter((d) => d.user_id === p.id && d.xp > 0)
-    let streak = emptyStreak()
-    for (const d of active) if (daysBetween(d.day, today) >= 0) streak = bump(streak, d.day)
-    const lang = (p.prefs as Prefs | null)?.activeLang
-    return {
-      username: p.username ?? 'Learner',
-      weeklyXp: active.filter((d) => daysBetween(start, d.day) >= 0 && daysBetween(d.day, today) >= 0).reduce((n, d) => n + d.xp, 0),
-      streak: reconcile(streak, today).current,
-      lang: lang && LANGS.includes(lang) ? lang : 'zh',
-      me: p.id === uid,
-      via: p.id === uid || mine.includes(p.id) ? 'lingora' : 'wordle',
-      ...cosmetics(p.prefs as Prefs | null),
-    }
-  })
-  return c.json(rows.sort((a, b) => b.weeklyXp - a.weeklyXp))
-})
-
-app.post('/friends', requireUser, async (c) => {
-  const uid = c.get('userId')
-  const username = str((await c.req.json().catch(() => ({}))).username).trim()
-  if (!USERNAME_RE.test(username)) fail(400, 'Enter their username.')
-  const s = db()
-  const rows = await s`select id from users where lower(username) = lower(${username})`
-  if (!rows.length) fail(404, `No one is called “${username}”. Check the spelling.`)
-  const fid = rows[0].id as string
-  if (fid === uid) fail(400, 'That’s you!')
-  // Friendships are mutual: both learners see each other on their boards.
-  await s.transaction([
-    s`insert into lingora_friendships (user_id, friend_id) values (${uid}, ${fid}) on conflict do nothing`,
-    s`insert into lingora_friendships (user_id, friend_id) values (${fid}, ${uid}) on conflict do nothing`,
-  ])
-  return c.json({ ok: true })
-})
-
-app.delete('/friends/:username', requireUser, async (c) => {
-  const uid = c.get('userId')
-  const s = db()
-  const rows = await s`select id from users where lower(username) = lower(${c.req.param('username')})`
-  if (rows.length) {
-    await s`delete from lingora_friendships where (user_id = ${uid} and friend_id = ${rows[0].id}) or (user_id = ${rows[0].id} and friend_id = ${uid})`
-  }
-  return c.json({ ok: true })
-})
+/* ---------- Friends, chats and groups: server/social.ts ---------- */
+registerSocialRoutes(app)
 
 /* ---------- Saved themes (the same table and shape as Wordle Unlimited) ---------- */
 
@@ -347,6 +244,33 @@ app.delete('/themes/:id', requireUser, async (c) => {
   const rows = await db()`delete from saved_themes where id = ${id} and user_id = ${c.get('userId')} returning id`
   if (!rows.length) fail(404, 'Saved theme not found.')
   return c.json({ ok: true })
+})
+
+/* ---------- AI conversation partner ---------- */
+
+// Admin-only while in testing (the same admins as Wordle Unlimited).
+app.get('/chat/status', async (c) => c.json({ enabled: chatEnabled && (await isAdmin(await currentUserId(c))) }))
+
+app.post('/chat', requireUser, async (c) => {
+  if (!chatEnabled) fail(503, 'Conversation practice isn’t set up on this server yet.')
+  const uid = c.get('userId')
+  if (!(await isAdmin(uid))) fail(403, 'Conversation practice isn’t available yet.')
+  rateLimit(c, `chat-burst:${uid}`, 30, 600_000, 'You’re chatting fast! Take a short break and try again in a few minutes.')
+  rateLimit(c, `chat-day:${uid}`, 300, 86_400_000, 'You’ve reached today’s conversation limit. Come back tomorrow!')
+  let body: ChatRequest
+  try {
+    body = validateChat(await c.req.json().catch(() => null))
+  } catch {
+    return fail(400, 'That message couldn’t be sent. Try something shorter.')
+  }
+  try {
+    return c.json(await chatTurn(body))
+  } catch (e) {
+    if (e instanceof Anthropic.RateLimitError) fail(429, 'The conversation partner is busy right now. Try again in a moment.')
+    if ((e as Error).message === 'refusal') fail(502, 'Your partner couldn’t reply to that. Try saying it another way.')
+    console.error('chat failed:', e)
+    return fail(502, 'Your partner didn’t answer. Try again.')
+  }
 })
 
 /* ---------- Validation ---------- */

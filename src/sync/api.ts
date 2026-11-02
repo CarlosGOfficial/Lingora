@@ -1,5 +1,10 @@
+import type { ChatReply, ChatRequest } from '../chat/types'
 import type { CustomTheme } from '../theme/themes'
-import type { Account, LeaderboardRow, SavedTheme, Snapshot, SyncRequest } from './types'
+import type { ChatBody, ChatKind, ChatMessage, GifResult, GroupSummary } from '../social/chat'
+import type { Notifications, PublicProfile } from '../social/profile'
+import type { Account, FriendsData, SavedTheme, Snapshot, SyncRequest } from './types'
+
+const chatPath = (kind: ChatKind, id: string) => (kind === 'dm' ? `/dm/${encodeURIComponent(id)}` : `/groups/${encodeURIComponent(id)}/messages`)
 
 export class ApiError extends Error {
   constructor(
@@ -34,11 +39,33 @@ export const api = {
   login: (body: { username: string; password: string }) => request<Account>('/auth/login', { body }),
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   sync: (body: SyncRequest) => request<Snapshot>('/sync', { body }),
-  friends: (today: string) => request<LeaderboardRow[]>(`/friends?today=${today}`),
-  addFriend: (username: string) => request<{ ok: boolean }>('/friends', { body: { username } }),
-  removeFriend: (username: string) => request<{ ok: boolean }>(`/friends/${encodeURIComponent(username)}`, { method: 'DELETE' }),
+  presence: () => request<{ ok: boolean }>('/presence', { method: 'POST' }),
+  friends: (today: string) => request<FriendsData>(`/friends?today=${today}`),
+  requestFriend: (username: string) => request<{ status: 'pending' | 'accepted'; name: string }>('/friends/request', { body: { username } }),
+  respondRequest: (requestId: number, action: 'accept' | 'decline' | 'cancel') =>
+    request<{ ok: boolean }>(`/friends/requests/${requestId}/${action}`, { method: 'POST' }),
+  removeFriend: (userId: string) => request<{ ok: boolean }>(`/friends/${encodeURIComponent(userId)}`, { method: 'DELETE' }),
+  // Chats: kind "dm" (id = their user id) or "group" (id = group id).
+  messages: (kind: ChatKind, id: string) => request<ChatMessage[]>(chatPath(kind, id)),
+  sendMessage: (kind: ChatKind, id: string, body: ChatBody) => request<ChatMessage>(chatPath(kind, id), { body }),
+  react: (kind: ChatKind, messageId: number, emoji: string) => request<{ reacted: boolean }>(`/messages/${kind}/${messageId}/reactions`, { body: { emoji } }),
+  editMessage: (kind: ChatKind, messageId: number, content: string) => request<{ ok: boolean }>(`/messages/${kind}/${messageId}`, { method: 'PATCH', body: { content } }),
+  deleteMessage: (kind: ChatKind, messageId: number) => request<{ ok: boolean }>(`/messages/${kind}/${messageId}`, { method: 'DELETE' }),
+  profile: (key: string, today: string) => request<PublicProfile>(`/profiles/${encodeURIComponent(key)}?today=${today}`),
+  saveBio: (bio: string) => request<{ ok: boolean }>('/profile', { method: 'PATCH', body: { bio } }),
+  notifications: () => request<Notifications>('/notifications'),
+  groups: () => request<GroupSummary[]>('/groups'),
+  createGroup: (name: string, memberIds: string[]) => request<{ id: number; skipped: number }>('/groups', { body: { name, memberIds } }),
+  renameGroup: (id: number, name: string) => request<{ ok: boolean }>(`/groups/${id}`, { method: 'PATCH', body: { name } }),
+  addGroupMember: (id: number, userId: string) => request<{ ok: boolean }>(`/groups/${id}/members`, { body: { userId } }),
+  removeGroupMember: (id: number, userId: string) => request<{ ok: boolean }>(`/groups/${id}/members/${encodeURIComponent(userId)}`, { method: 'DELETE' }),
+  gifs: (q: string) => request<{ enabled: boolean; results: GifResult[] }>(`/gifs?q=${encodeURIComponent(q)}`),
+  gifFavorites: () => request<{ id: string }[]>('/gifs/favorites'),
+  setGifFavorite: (id: string, favorite: boolean) => request<{ favorite: boolean }>('/gifs/favorites', { body: { id, favorite } }),
   themes: () => request<SavedTheme[]>('/themes'),
   saveTheme: (name: string, theme: CustomTheme) => request<SavedTheme>('/themes', { body: { name, theme } }),
   updateTheme: (id: string, patch: { name?: string; theme?: CustomTheme }) => request<SavedTheme>(`/themes/${id}`, { method: 'PATCH', body: patch }),
   deleteTheme: (id: string) => request<{ ok: boolean }>(`/themes/${id}`, { method: 'DELETE' }),
+  chatStatus: () => request<{ enabled: boolean }>('/chat/status'),
+  chat: (body: ChatRequest) => request<ChatReply>('/chat', { body }),
 }

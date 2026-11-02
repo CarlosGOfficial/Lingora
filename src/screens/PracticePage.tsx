@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon, type IconName } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
@@ -5,6 +6,7 @@ import { COURSES, isUnitComplete } from '../content'
 import { VoiceNotice, useVoiceAvailable } from '../components/VoiceNotice'
 import { recognitionSupported } from '../lib/speech'
 import { useStore } from '../store/useStore'
+import { api } from '../sync/api'
 
 const MODES: { mode: string; title: string; desc: string; icon: IconName }[] = [
   { mode: 'speaking', title: 'Speaking · Shadowing', desc: 'Hear it, say it, get a pronunciation match score.', icon: 'mic' },
@@ -13,11 +15,22 @@ const MODES: { mode: string; title: string; desc: string; icon: IconName }[] = [
 ]
 
 export function PracticePage() {
-  const { activeLang, progress } = useStore()
+  const { activeLang, progress, account } = useStore()
   const course = COURSES[activeLang]
   const prog = progress[activeLang]
   const known = Object.keys(prog.cards).length
   const enough = known >= 4
+  const canChat = prog.completedLessons.length > 0
+  // Admin-only for now: the server decides who sees it.
+  const [chatAllowed, setChatAllowed] = useState(false)
+  useEffect(() => {
+    if (!account) return setChatAllowed(false)
+    let live = true
+    api.chatStatus().then((r) => live && setChatAllowed(r.enabled), () => {})
+    return () => {
+      live = false
+    }
+  }, [account])
   const voice = useVoiceAvailable(course.bcp47)
 
   return (
@@ -26,6 +39,15 @@ export function PracticePage() {
       {!enough && <div className="cta-card calm">Complete your first lesson to unlock practice.</div>}
 
       <div className="mode-grid stagger">
+        {chatAllowed && (
+          <Link to={canChat ? '/conversation' : '#'} className={`mode-card featured ${canChat ? '' : 'disabled'}`} aria-disabled={!canChat}>
+            <span className="mode-icon">
+              <Icon name="chat" size={24} />
+            </span>
+            <strong>Conversation · AI partner</strong>
+            <span className="muted small">Role-play real situations by typing or speaking, using only what you’ve learned.</span>
+          </Link>
+        )}
         {MODES.map((m) => {
           const ok = enough && (m.mode !== 'listening' || voice)
           return (

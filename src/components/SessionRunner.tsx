@@ -6,7 +6,9 @@ import type { Rating } from '../lib/fsrs'
 import { AudioButton } from './AudioButton'
 import { Icon } from './Icon'
 import { TargetText } from './TargetText'
+import { Cloze } from './exercises/Cloze'
 import { Grammar } from './exercises/Grammar'
+import { ReadingDrill } from './exercises/ReadingDrill'
 import { Intro } from './exercises/Intro'
 import { Match } from './exercises/Match'
 import { MultipleChoice } from './exercises/MultipleChoice'
@@ -52,6 +54,10 @@ function ExerciseView(props: { ex: Exercise; course: Course; locked: boolean; on
       return <Speak {...props} ex={ex} />
     case 'grammar':
       return <Grammar {...props} ex={ex} />
+    case 'cloze':
+      return <Cloze {...props} ex={ex} />
+    case 'reading':
+      return <ReadingDrill {...props} ex={ex} />
   }
 }
 

@@ -1,5 +1,6 @@
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useWallet } from '../shop/useWallet'
+import { useFriendAlerts } from '../social/useFriends'
 import { ThemeMenu } from '../theme/ThemeMenu'
 import { APP_NAME } from '../config'
 import { COURSES, LANG_CODES } from '../content'
@@ -22,6 +23,7 @@ export function Shell() {
   const s = liveStreak(streak)
   const { coins } = useWallet()
   const location = useLocation()
+  const alerts = useFriendAlerts()
 
   return (
     <div className="shell">
@@ -39,6 +41,7 @@ export function Shell() {
               <Icon name={n.icon} />
               <span>{n.label}</span>
               {n.to === '/review' && due > 0 && <span className="badge">{due}</span>}
+              {n.to === '/friends' && alerts > 0 && <span className="badge">{alerts}</span>}
             </NavLink>
           ))}
         </nav>
@@ -91,6 +94,7 @@ export function Shell() {
             <Icon name={n.icon} />
             <span>{n.label}</span>
             {n.to === '/review' && due > 0 && <span className="badge">{due}</span>}
+            {n.to === '/friends' && alerts > 0 && <span className="badge">{alerts}</span>}
           </NavLink>
         ))}
       </nav>

@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { VoiceNotice } from '../components/VoiceNotice'
-import { COURSES, isLessonUnlocked, isUnitComplete, nextLessonId } from '../content'
+import { COURSES, isLessonUnlocked, isUnitComplete, nextLessonId, unitReviewId } from '../content'
 import { dayKey, formatRelative } from '../lib/date'
 import { dueCards, liveStreak, todayXp, useStore } from '../store/useStore'
 
@@ -73,6 +73,7 @@ export function Home() {
       {course.units.map((unit, ui) => {
         const unitDone = isUnitComplete(unit, prog.completedLessons)
         const readingDone = unit.reading && prog.completedReadings.includes(unit.reading.id)
+        const reviewDone = prog.completedLessons.includes(unitReviewId(unit.id))
         const newTier = ui === 0 || course.units[ui - 1].level !== unit.level
         const tier = [...new Set(course.units.slice(0, ui + 1).map((u) => u.level))].length
         return (
@@ -126,8 +127,22 @@ export function Home() {
                   </div>
                 )
               })}
+              <div className="path-step" style={{ transform: `translateX(${ZIGZAG[unit.lessons.length % ZIGZAG.length]}px)` }}>
+                <button
+                  className={`node checkpoint ${reviewDone ? 'done' : unitDone ? 'current' : 'locked'}`}
+                  disabled={!unitDone}
+                  onClick={() => navigate(`/unit-review/${unit.id}`)}
+                  aria-label={`Unit review${reviewDone ? ' (completed)' : unitDone ? '' : ' (locked)'}`}
+                >
+                  <Icon name={reviewDone ? 'check' : unitDone ? 'target' : 'lock'} size={28} />
+                </button>
+                <div className="node-label">
+                  <strong>Unit review</strong>
+                  <span className="muted small">Mixed practice of the whole unit</span>
+                </div>
+              </div>
               {unit.reading && (
-                <div className="path-step" style={{ transform: `translateX(${ZIGZAG[unit.lessons.length % ZIGZAG.length]}px)` }}>
+                <div className="path-step" style={{ transform: `translateX(${ZIGZAG[(unit.lessons.length + 1) % ZIGZAG.length]}px)` }}>
                   <button
                     className={`node reading ${readingDone ? 'done' : unitDone ? 'current' : 'locked'}`}
                     disabled={!unitDone}

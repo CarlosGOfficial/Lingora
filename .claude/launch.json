@@ -4,7 +4,7 @@
     {
       "name": "dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": ["--prefix", "C:\\Users\\carlo\\Documents\\GitHub\\Lingora", "run", "dev"],
       "port": 5173
     }
   ]

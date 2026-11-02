@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { SPEAK_PASS_THRESHOLD } from '../../config'
+import { SPEAK_CLOSE_THRESHOLD, SPEAK_PASS_THRESHOLD } from '../../config'
 import type { Exercise } from '../../engine/exercises'
-import { speechScore } from '../../lib/answer'
-import { listen, recognitionSupported, type Listening } from '../../lib/speech'
+import { scoreSpeech, type SpeechResult } from '../../lib/pronounce'
+import { listen, recognitionErrorMessage, recognitionSupported, speak, type Listening } from '../../lib/speech'
+import { useStore } from '../../store/useStore'
 import { AudioButton } from '../AudioButton'
 import { Icon } from '../Icon'
 import { TargetText } from '../TargetText'
@@ -10,13 +11,17 @@ import type { ExerciseProps } from './types'
 
 const MAX_TRIES = 3
 
-/** Shadowing: hear the model, say it, get scored by speech recognition. */
+type Phase = 'idle' | 'listening' | 'scored' | 'error'
+
+/** Shadowing: hear the model, say it, see which parts landed. */
 export function Speak({ ex, course, locked, onSubmit }: ExerciseProps<Extract<Exercise, { type: 'speak' }>>) {
   const { item } = ex
+  const rate = useStore((s) => s.settings.speechRate)
   const supported = recognitionSupported()
-  const [state, setState] = useState<'idle' | 'listening' | 'scored' | 'error'>('idle')
-  const [heard, setHeard] = useState('')
-  const [score, setScore] = useState(0)
+  const [phase, setPhase] = useState<Phase>('idle')
+  const [live, setLive] = useState('')
+  const [result, setResult] = useState<SpeechResult | null>(null)
+  const [best, setBest] = useState(0)
   const [tries, setTries] = useState(0)
   const [error, setError] = useState('')
   const session = useRef<Listening | null>(null)
@@ -24,27 +29,44 @@ export function Speak({ ex, course, locked, onSubmit }: ExerciseProps<Extract<Ex
   useEffect(() => () => session.current?.stop(), [])
 
   const record = async () => {
-    if (state === 'listening') {
+    if (phase === 'listening') {
       session.current?.stop()
       return
     }
-    setState('listening')
-    session.current = listen(course.bcp47)
+    window.speechSynthesis?.cancel()
+    setLive('')
+    setError('')
+    setPhase('listening')
+    session.current = listen(course.bcp47, setLive)
     try {
       const alts = await session.current.result
-      const sc = speechScore(alts, item)
+      if (!alts.length) {
+        setPhase('error')
+        setError(recognitionErrorMessage('no-speech'))
+        return
+      }
+      const r = scoreSpeech(alts, item, course.lang)
       const n = tries + 1
-      setHeard(alts[0] ?? '')
-      setScore(sc)
+      const top = Math.max(best, r.score)
+      setResult(r)
+      setBest(top)
       setTries(n)
-      setState('scored')
-      if (sc >= SPEAK_PASS_THRESHOLD) onSubmit({ quality: 'correct', given: alts[0] })
-      else if (n >= MAX_TRIES) onSubmit({ quality: 'almost', given: alts[0], note: 'Keep practising this one — it’ll come back soon.' })
+      setPhase('scored')
+      if (r.score >= SPEAK_PASS_THRESHOLD) onSubmit({ quality: 'correct', given: r.heard })
+      else if (n >= MAX_TRIES)
+        onSubmit({
+          quality: 'almost',
+          given: r.heard,
+          note: top >= SPEAK_CLOSE_THRESHOLD ? 'Close! This one will come back for more practice.' : 'Keep practising this one — it’ll come back soon.',
+        })
     } catch (e) {
-      setState('error')
-      setError((e as Error).message === 'not-allowed' ? 'Microphone permission was denied.' : 'Couldn’t hear anything — try again.')
+      setPhase('error')
+      setError(recognitionErrorMessage((e as Error).message))
     }
   }
+
+  const verdict = !result ? null : result.score >= SPEAK_PASS_THRESHOLD ? 'good' : result.score >= SPEAK_CLOSE_THRESHOLD ? 'close' : 'off'
+  const joiner = course.lang === 'pt' ? ' ' : ''
 
   return (
     <div className="ex">
@@ -59,22 +81,59 @@ export function Speak({ ex, course, locked, onSubmit }: ExerciseProps<Extract<Ex
 
       {supported ? (
         <div className="speak-zone">
-          <button className={`mic-btn ${state === 'listening' ? 'is-live' : ''}`} onClick={record} disabled={locked} aria-label="Record">
+          <button className={`mic-btn ${phase === 'listening' ? 'is-live' : ''}`} onClick={record} disabled={locked} aria-label={phase === 'listening' ? 'Stop' : 'Record'}>
             <Icon name="mic" size={34} />
           </button>
-          <div className="muted small">{state === 'listening' ? 'Listening… tap to stop' : 'Tap the mic and speak'}</div>
-          {state === 'scored' && (
-            <div className={`speak-result ${score >= SPEAK_PASS_THRESHOLD ? 'good' : 'meh'}`}>
-              <div className="meter">
-                <div style={{ width: `${Math.round(score * 100)}%` }} />
-              </div>
-              <div>
-                {Math.round(score * 100)}% match{heard && <> · heard “<span lang={course.bcp47}>{heard}</span>”</>}
-              </div>
-              {score < SPEAK_PASS_THRESHOLD && !locked && <div className="small">Try again ({MAX_TRIES - tries} left)</div>}
+          <div className="muted small" aria-live="polite">
+            {phase === 'listening' ? 'Listening… tap to stop' : tries ? 'Tap to try again' : 'Tap the mic and speak'}
+          </div>
+
+          {phase === 'listening' && (
+            <div className="live-transcript" lang={course.bcp47}>
+              {live || <span className="listening-dots" aria-hidden="true"><i /><i /><i /></span>}
             </div>
           )}
-          {state === 'error' && <div className="speak-result meh">{error}</div>}
+
+          {phase === 'scored' && result && (
+            <div className={`speak-result ${verdict}`}>
+              <div className="speak-units" lang={course.bcp47} aria-label="Your pronunciation, part by part">
+                {result.units.map((u, i) => (
+                  <span key={i} className={u.ok ? 'hit' : 'miss'}>
+                    {u.text}
+                    {joiner}
+                  </span>
+                ))}
+              </div>
+              <div className="meter">
+                <div style={{ width: `${Math.round(result.score * 100)}%` }} />
+              </div>
+              <div className="small">
+                <strong>
+                  {verdict === 'good' ? 'Great pronunciation!' : verdict === 'close' ? 'Close! Focus on the red parts.' : 'Not quite — listen again and copy the rhythm.'}
+                </strong>{' '}
+                {Math.round(result.score * 100)}% match
+                {result.heard && (
+                  <>
+                    {' '}
+                    · heard “<span lang={course.bcp47}>{result.heard}</span>”
+                  </>
+                )}
+              </div>
+              {verdict !== 'good' && !locked && (
+                <div className="row small">
+                  <button type="button" className="btn btn-ghost small" onClick={() => speak(item.target, course.bcp47, rate * 0.7)}>
+                    <Icon name="slow" size={14} /> Hear it slowly
+                  </button>
+                  <span className="muted">{MAX_TRIES - tries} tries left</span>
+                </div>
+              )}
+            </div>
+          )}
+          {phase === 'error' && (
+            <div className="speak-result off" role="alert">
+              {error}
+            </div>
+          )}
         </div>
       ) : (
         <div className="speak-zone">

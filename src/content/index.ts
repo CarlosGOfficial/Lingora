@@ -80,6 +80,15 @@ export function isLessonUnlocked(course: Course, completed: string[], lessonId: 
   return completed.includes(lessonId) || nextLessonId(course, completed) === lessonId
 }
 
+/** Completion id for a unit's review checkpoint (stored alongside lesson completions). */
+export const unitReviewId = (unitId: string) => `${unitId}-review`
+
+export function findUnit(unitId: string): { course: Course; unit: Unit } | undefined {
+  const course = courseFor(unitId)
+  const unit = course?.units.find((u) => u.id === unitId)
+  return course && unit ? { course, unit } : undefined
+}
+
 export function isUnitComplete(unit: Unit, completed: string[]): boolean {
   return unit.lessons.every((l) => completed.includes(l.id))
 }

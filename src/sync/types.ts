@@ -2,6 +2,7 @@
 import type { LangCode } from '../content/types'
 import type { Rating, SrsCard } from '../lib/fsrs'
 import type { DailyClaim, Purchase } from '../shop/wallet'
+import type { ChatPerson } from '../social/chat'
 import type { CustomTheme } from '../theme/themes'
 
 export interface ReviewEvent {
@@ -75,6 +76,7 @@ export interface Snapshot {
 }
 
 export interface LeaderboardRow {
+  id: string
   username: string
   weeklyXp: number
   streak: number
@@ -82,8 +84,29 @@ export interface LeaderboardRow {
   me: boolean
   title: string | null
   nameColor: string | null
-  /** Friends from Wordle Unlimited show up too, once they use Lingora. */
-  via: 'lingora' | 'wordle'
+}
+
+/* Friends are shared with Wordle Unlimited (its friendships and direct_messages tables). */
+
+export type FriendCard = ChatPerson
+
+export interface Friend extends FriendCard {
+  online: boolean
+  lastSeen: string | null
+  unread: number
+  /** Has opened Lingora (only they appear on the leaderboard). */
+  onLingora: boolean
+}
+
+export interface FriendRequest extends FriendCard {
+  requestId: number
+}
+
+export interface FriendsData {
+  leaderboard: LeaderboardRow[]
+  friends: Friend[]
+  incoming: FriendRequest[]
+  outgoing: FriendRequest[]
 }
 
 export interface SavedTheme {

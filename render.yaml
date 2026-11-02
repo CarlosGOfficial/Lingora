@@ -17,3 +17,9 @@ services:
         value: production
       - key: DATABASE_URL
         sync: false
+      # Optional: turns on the AI conversation partner (console.anthropic.com → API keys).
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Optional: GIF search in chats (use the same key as Wordle Unlimited).
+      - key: GIPHY_API_KEY
+        sync: false
