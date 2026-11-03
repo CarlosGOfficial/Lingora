@@ -3,20 +3,16 @@ import { APP_NAME, DAILY_GOALS } from '../config'
 import { COURSES, LANG_CODES } from '../content'
 import type { LangCode } from '../content/types'
 import { useStore } from '../store/useStore'
+import { logOut } from '../sync/sync'
 
-const METHODS = [
-  ['Spaced repetition', 'FSRS schedules each word right before you’d forget it.'],
-  ['Active recall', 'You produce answers — typing, speaking, building sentences.'],
-  ['Real input', 'Graded stories at your level, read and heard.'],
-  ['Shadowing', 'Hear a native model, repeat, get scored.'],
-]
-
+/** First-time setup after signing up (or opening Lingora with a Wordle account): course and daily goal. */
 export function Onboarding() {
   const onboard = useStore((s) => s.onboard)
+  const account = useStore((s) => s.account)
   const [step, setStep] = useState(0)
   const [lang, setLang] = useState<LangCode | null>(null)
   const [goal, setGoal] = useState(20)
-  const [name, setName] = useState('')
+  const name = account?.username ?? ''
 
   return (
     <div className="onboarding">
@@ -28,16 +24,20 @@ export function Onboarding() {
             <span className="hero-gradient">{APP_NAME.slice(3)}</span>
           </span>
         </div>
+        <div className="setup-steps" aria-label={`Step ${step + 1} of 2`}>
+          <span className={step >= 0 ? 'on' : ''} />
+          <span className={step >= 1 ? 'on' : ''} />
+        </div>
 
         {step === 0 && (
           <>
-            <h1>What do you want to learn?</h1>
-            <p className="muted">Every course follows an official proficiency standard, so you always know your level.</p>
+            <h1>{name ? `Welcome, ${name}!` : 'Welcome!'}</h1>
+            <p className="muted">What do you want to learn first? You can add the other courses any time.</p>
             <div className="lang-cards">
               {LANG_CODES.map((code) => {
                 const c = COURSES[code]
                 return (
-                  <button key={code} className={`lang-card lang-${code} ${lang === code ? 'active' : ''}`} onClick={() => setLang(code)}>
+                  <button key={code} className={`lang-card lang-${code} ${lang === code ? 'active' : ''}`} onClick={() => setLang(code)} aria-pressed={lang === code}>
                     <span className="lang-badge" lang={c.bcp47}>
                       {c.badge}
                     </span>
@@ -64,9 +64,11 @@ export function Onboarding() {
             <p className="muted">Small and steady beats cramming. You can change this any time.</p>
             <div className="goal-list">
               {DAILY_GOALS.map((g) => (
-                <button key={g.xp} className={`goal-option ${goal === g.xp ? 'active' : ''}`} onClick={() => setGoal(g.xp)}>
+                <button key={g.xp} className={`goal-option ${goal === g.xp ? 'active' : ''}`} onClick={() => setGoal(g.xp)} aria-pressed={goal === g.xp}>
                   <strong>{g.label}</strong>
-                  <span className="muted">{g.xp} XP / day · ~{Math.round(g.xp / 2)} min</span>
+                  <span className="muted">
+                    {g.xp} XP / day · ~{Math.round(g.xp / 2)} min
+                  </span>
                 </button>
               ))}
             </div>
@@ -74,42 +76,20 @@ export function Onboarding() {
               <button className="btn btn-ghost" onClick={() => setStep(0)}>
                 Back
               </button>
-              <button className="btn btn-primary btn-lg grow" onClick={() => setStep(2)}>
-                Continue
+              <button className="btn btn-primary btn-lg grow" onClick={() => lang && onboard(name, lang, goal)}>
+                Start my first lesson
               </button>
             </div>
           </>
         )}
 
-        {step === 2 && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (lang) onboard(name, lang, goal)
-            }}
-          >
-            <h1>How it works</h1>
-            <ul className="method-list">
-              {METHODS.map(([t, d]) => (
-                <li key={t}>
-                  <strong>{t}</strong>
-                  <span className="muted">{d}</span>
-                </li>
-              ))}
-            </ul>
-            <label className="field">
-              <span>What should we call you?</span>
-              <input className="text-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" autoFocus maxLength={30} />
-            </label>
-            <div className="row">
-              <button type="button" className="btn btn-ghost" onClick={() => setStep(1)}>
-                Back
-              </button>
-              <button type="submit" className="btn btn-primary btn-lg grow">
-                Start learning
-              </button>
-            </div>
-          </form>
+        {account && (
+          <p className="small muted center-text setup-foot">
+            Signed in as <strong>{account.username}</strong> ·{' '}
+            <button className="link-btn" onClick={() => void logOut()}>
+              Not you?
+            </button>
+          </p>
         )}
       </div>
     </div>

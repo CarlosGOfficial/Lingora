@@ -1,5 +1,6 @@
 import type { ChatReply, ChatRequest } from '../chat/types'
 import type { CustomTheme } from '../theme/themes'
+import type { LangCode } from '../content/types'
 import type { ChatBody, ChatKind, ChatMessage, GifResult, GroupSummary } from '../social/chat'
 import type { Notifications, PublicProfile } from '../social/profile'
 import type { Account, FriendsData, SavedTheme, Snapshot, SyncRequest } from './types'
@@ -39,6 +40,7 @@ export const api = {
   login: (body: { username: string; password: string }) => request<Account>('/auth/login', { body }),
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   sync: (body: SyncRequest) => request<Snapshot>('/sync', { body }),
+  resetProgress: (lang?: LangCode) => request<{ ok: boolean }>('/progress/reset', { body: lang ? { lang } : {}, method: 'POST' }),
   presence: () => request<{ ok: boolean }>('/presence', { method: 'POST' }),
   friends: (today: string) => request<FriendsData>(`/friends?today=${today}`),
   requestFriend: (username: string) => request<{ status: 'pending' | 'accepted'; name: string }>('/friends/request', { body: { username } }),

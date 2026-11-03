@@ -1,5 +1,6 @@
 import { addLessons, insertUnits } from './extend'
 import { jaMoreUnits } from './ja-units-more'
+import { jaSectionUnits } from './ja-units-sections'
 import { jaMoreLessons } from './ja-more'
 import { jaTier23Units } from './ja-tier2-3'
 import type { Course, Item } from './types'
@@ -416,5 +417,5 @@ export const ja: Course = {
       },
     },
     ...jaTier23Units,
-  ], jaMoreLessons), jaMoreUnits),
+  ], jaMoreLessons), [...jaMoreUnits, ...jaSectionUnits]),
 }

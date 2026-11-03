@@ -12,7 +12,8 @@ let inFlight: Promise<void> | null = null
 function localPrefs(): Prefs {
   const s = useStore.getState()
   return {
-    activeLang: s.activeLang,
+    // Only once a course is chosen, so other devices still show the setup until then.
+    activeLang: s.onboarded ? s.activeLang : undefined,
     languages: s.languages,
     dailyGoal: s.dailyGoal,
     settings: { ...s.settings },
@@ -103,9 +104,13 @@ async function afterAuth(acct: Account, adoptServerPrefs: boolean) {
     account: acct,
     name: acct.username,
     outbox: importLocalProgress(),
-    onboarded: true,
+    guest: false,
+    // New accounts (and Wordle accounts opening Lingora for the first time) get the
+    // course setup; anyone who already chose a course here or on another device skips it.
+    onboarded: s.onboarded,
   }
   if (adoptServerPrefs && p.activeLang && LANG_CODES.includes(p.activeLang)) {
+    patch.onboarded = true
     patch.activeLang = p.activeLang
     patch.languages = (p.languages ?? [p.activeLang]).filter((l): l is LangCode => LANG_CODES.includes(l))
     if (typeof p.dailyGoal === 'number') patch.dailyGoal = p.dailyGoal
@@ -129,6 +134,31 @@ export async function signUp(username: string, password: string) {
 
 export async function logIn(username: string, password: string) {
   await afterAuth(await api.login({ username, password }), true)
+}
+
+/**
+ * Starts a course over. Signed in, the server's history for it is deleted too (after
+ * pushing anything still queued), so the next sync can't bring it back.
+ */
+export async function restartCourse(lang: LangCode) {
+  const signedIn = !!useStore.getState().account
+  if (signedIn) {
+    await syncNow()
+    await api.resetProgress(lang)
+  }
+  useStore.getState().restartCourse(lang)
+  if (signedIn) await syncNow()
+}
+
+/** Erases all Lingora progress (here and, signed in, on the server); the account stays. */
+export async function eraseAllProgress() {
+  const signedIn = !!useStore.getState().account
+  if (signedIn) {
+    await syncNow()
+    await api.resetProgress()
+  }
+  useStore.getState().eraseProgress()
+  if (signedIn) await syncNow()
 }
 
 /** Signing out clears this device so the next person starts fresh. */

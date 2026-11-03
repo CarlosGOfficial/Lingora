@@ -1,5 +1,6 @@
 import { addLessons, insertUnits } from './extend'
 import { ptMoreUnits } from './pt-units-more'
+import { ptSectionUnits } from './pt-units-sections'
 import { ptMoreLessons } from './pt-more'
 import { ptTier23Units } from './pt-tier2-3'
 import type { Course, Item } from './types'
@@ -361,5 +362,5 @@ export const pt: Course = {
       },
     },
     ...ptTier23Units,
-  ], ptMoreLessons), ptMoreUnits),
+  ], ptMoreLessons), [...ptMoreUnits, ...ptSectionUnits]),
 }

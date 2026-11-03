@@ -2,16 +2,15 @@ import { useEffect, useState } from 'react'
 import { formatAgo } from '../lib/date'
 import { useStore } from '../store/useStore'
 import { api } from '../sync/api'
-import { logIn, logOut, signUp, syncNow } from '../sync/sync'
+import { logOut, syncNow } from '../sync/sync'
+import { AuthForm, type AuthMode } from './AuthForm'
 
 type Server = 'checking' | 'ready' | 'no-db' | 'offline'
 
 export function AccountPanel() {
   const { account, lastSyncedAt, syncError, outbox } = useStore()
   const [server, setServer] = useState<Server>('checking')
-  const [mode, setMode] = useState<'signup' | 'login'>('signup')
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
+  const [mode, setMode] = useState<AuthMode>('signup')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -46,6 +45,7 @@ export function AccountPanel() {
           {pending > 0 && ` · ${pending} change${pending === 1 ? '' : 's'} waiting`}
         </div>
         {syncError && <p className="error small">{syncError}</p>}
+        {error && <p className="error small">{error}</p>}
         <div className="row">
           <button className="btn" disabled={busy} onClick={() => run(syncNow)}>
             Sync now
@@ -74,56 +74,13 @@ export function AccountPanel() {
     )
   }
 
+  // Device-only mode (the server couldn't hold accounts earlier): offer to create one now.
   return (
-    <form
-      className="settings"
-      onSubmit={(e) => {
-        e.preventDefault()
-        void run(() => (mode === 'signup' ? signUp(username, password) : logIn(username, password)))
-      }}
-    >
+    <div className="settings">
       <p className="muted small" style={{ margin: 0 }}>
-        {mode === 'signup'
-          ? 'Create an account to back up your progress, sync across devices and add real friends. Your current progress comes with you.'
-          : 'Log in to sync. Progress on this device will be merged into your account.'}{' '}
-        Accounts are shared with <strong>Wordle Unlimited</strong> — already have one? Just log in.
+        Create an account to back up your progress, sync across devices and add real friends. Your progress on this device comes with you.
       </p>
-      <label className="field">
-        <span>Username</span>
-        <input
-          className="text-input"
-          autoComplete="username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          pattern="[A-Za-z0-9_]{3,20}"
-          title="3–20 letters, numbers or underscores"
-          required
-        />
-      </label>
-      <label className="field">
-        <span>Password</span>
-        <input
-          className="text-input"
-          type="password"
-          autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-          minLength={mode === 'signup' ? 8 : undefined}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-      </label>
-      {error && <p className="error small">{error}</p>}
-      <div className="row">
-        <button className="btn btn-primary" disabled={busy}>
-          {mode === 'signup' ? 'Create account' : 'Log in'}
-        </button>
-        <button type="button" className="btn btn-ghost" onClick={() => setMode(mode === 'signup' ? 'login' : 'signup')}>
-          {mode === 'signup' ? 'I already have an account' : 'Create a new account'}
-        </button>
-      </div>
-      <div className="muted small">
-        {mode === 'login' && 'PIN-only Wordle accounts need a password first: set one in Wordle Unlimited.'}
-      </div>
-    </form>
+      <AuthForm mode={mode} onModeChange={setMode} />
+    </div>
   )
 }

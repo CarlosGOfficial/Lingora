@@ -1,11 +1,16 @@
-import { Link, useNavigate } from 'react-router-dom'
+import type { CSSProperties } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { VoiceNotice } from '../components/VoiceNotice'
 import { COURSES, isLessonUnlocked, isUnitComplete, nextLessonId, unitReviewId } from '../content'
+import { currentSectionIndex, isSectionComplete, levelLabel, sectionProgress, sections, type Section } from '../content/sections'
+import type { Course } from '../content/types'
 import { dayKey, formatRelative } from '../lib/date'
 import { dueCards, liveStreak, todayXp, useStore } from '../store/useStore'
 
 const ZIGZAG = [0, 46, 70, 46, 0, -46, -70, -46]
+/** The path's sideways swing; CSS scales it down on narrow screens (--zz-scale). */
+const zigzag = (i: number) => ({ '--zz': ZIGZAG[i] }) as CSSProperties
 
 export function Home() {
   const navigate = useNavigate()
@@ -18,6 +23,18 @@ export function Home() {
   const goalPct = Math.min(1, xp / dailyGoal)
   const next = nextLessonId(course, prog.completedLessons)
   const s = liveStreak(streak)
+  // One section on screen at a time: yours by default, or one picked from the Sections page.
+  const [params, setParams] = useSearchParams()
+  const all = sections(course)
+  const currentIndex = currentSectionIndex(course, prog.completedLessons)
+  const asked = Number(params.get('section'))
+  const section = all[Number.isInteger(asked) && asked >= 1 && asked <= all.length ? asked - 1 : currentIndex]
+  const nextSection = all[section.index + 1]
+  const sectionDone = isSectionComplete(section, prog.completedLessons)
+  const showSection = (i: number) => {
+    setParams(i === currentIndex ? {} : { section: String(i + 1) })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   return (
     <div className="home">
@@ -70,22 +87,30 @@ export function Home() {
         </Link>
       </section>
 
-      {course.units.map((unit, ui) => {
+      <SectionBanner course={course} section={section} total={all.length} completed={prog.completedLessons} current={section.index === currentIndex} />
+
+      {section.index > currentIndex && (
+        <div className="jump-card">
+          <Icon name="bolt" size={24} filled className="c-flame" />
+          <div className="grow">
+            <strong>Already know this?</strong>
+            <span className="muted small">
+              Pass a short test on {section.index === 1 ? 'Section 1' : `Sections 1–${section.index}`} to start here.
+            </span>
+          </div>
+          <Link to={`/section-test/${section.index}`} className="btn btn-primary small">
+            Jump here
+          </Link>
+        </div>
+      )}
+
+      {section.units.map((unit) => {
+        const ui = course.units.indexOf(unit)
         const unitDone = isUnitComplete(unit, prog.completedLessons)
         const readingDone = unit.reading && prog.completedReadings.includes(unit.reading.id)
         const reviewDone = prog.completedLessons.includes(unitReviewId(unit.id))
-        const newTier = ui === 0 || course.units[ui - 1].level !== unit.level
-        const tier = [...new Set(course.units.slice(0, ui + 1).map((u) => u.level))].length
         return (
           <section key={unit.id} className={`unit unit-${activeLang}`}>
-            {newTier && (
-              <div className="tier-head">
-                <span className="tier-num">Tier {tier}</span>
-                <span>
-                  {course.standard} · <strong>{unit.level}</strong>
-                </span>
-              </div>
-            )}
             <header className="unit-head">
               <div>
                 <span className="unit-level">
@@ -110,7 +135,7 @@ export function Home() {
                 const unlocked = isLessonUnlocked(course, prog.completedLessons, lesson.id)
                 const current = lesson.id === next
                 return (
-                  <div key={lesson.id} className={`path-step ${current ? 'is-current' : ''}`} style={{ transform: `translateX(${ZIGZAG[li % ZIGZAG.length]}px)` }}>
+                  <div key={lesson.id} className={`path-step ${current ? 'is-current' : ''}`} style={zigzag(li % ZIGZAG.length)}>
                     {current && <span className="start-bubble">{done ? 'Practice' : 'Start'}</span>}
                     <button
                       className={`node ${done ? 'done' : current ? 'current' : 'locked'}`}
@@ -127,7 +152,7 @@ export function Home() {
                   </div>
                 )
               })}
-              <div className="path-step" style={{ transform: `translateX(${ZIGZAG[unit.lessons.length % ZIGZAG.length]}px)` }}>
+              <div className="path-step" style={zigzag(unit.lessons.length % ZIGZAG.length)}>
                 <button
                   className={`node checkpoint ${reviewDone ? 'done' : unitDone ? 'current' : 'locked'}`}
                   disabled={!unitDone}
@@ -142,7 +167,7 @@ export function Home() {
                 </div>
               </div>
               {unit.reading && (
-                <div className="path-step" style={{ transform: `translateX(${ZIGZAG[(unit.lessons.length + 1) % ZIGZAG.length]}px)` }}>
+                <div className="path-step" style={zigzag((unit.lessons.length + 1) % ZIGZAG.length)}>
                   <button
                     className={`node reading ${readingDone ? 'done' : unitDone ? 'current' : 'locked'}`}
                     disabled={!unitDone}
@@ -164,9 +189,48 @@ export function Home() {
         )
       })}
 
-      <section className="coming-soon muted">
-        More {course.standard} units are on the way. Keep your reviews up while you wait — that’s where long-term memory is built.
-      </section>
+      {nextSection ? (
+        <section className={`section-next ${sectionDone ? 'ready' : ''}`}>
+          <span className="eyebrow">
+            Up next · Section {nextSection.index + 1} · {nextSection.level}
+          </span>
+          <strong>{nextSection.title}</strong>
+          <span className="muted small">{nextSection.blurb}</span>
+          <button className={`btn ${sectionDone ? 'btn-primary' : ''}`} onClick={() => showSection(nextSection.index)}>
+            {sectionDone ? `Start Section ${nextSection.index + 1}` : `Preview Section ${nextSection.index + 1}`} <Icon name="play" size={14} />
+          </button>
+        </section>
+      ) : (
+        <section className="coming-soon muted">
+          More {course.standard} units are on the way. Keep your reviews up while you wait — that’s where long-term memory is built.
+        </section>
+      )}
     </div>
+  )
+}
+
+/** The big header for the section on screen: where you are in the course and how far through it. */
+function SectionBanner({ course, section, total, completed, current }: { course: Course; section: Section; total: number; completed: string[]; current: boolean }) {
+  const { done, total: lessons } = sectionProgress(section, completed)
+  const finished = done === lessons
+  return (
+    <section className={`section-banner lang-${course.lang}`}>
+      <div className="row tight section-banner-top">
+        <span className="eyebrow">
+          Section {section.index + 1} of {total} · {levelLabel(course, section.level)}
+        </span>
+        <Link to="/sections" className="section-all">
+          <Icon name="layers" size={14} /> All sections
+        </Link>
+      </div>
+      <h2>{section.title}</h2>
+      <p>{section.blurb}</p>
+      <div className="section-progress">
+        <div className="progress thin">
+          <div style={{ width: `${(done / lessons) * 100}%` }} />
+        </div>
+        <span className="small">{finished ? 'Complete ✓' : `${done} / ${lessons} lessons${current ? '' : ' · not started'}`}</span>
+      </div>
+    </section>
   )
 }

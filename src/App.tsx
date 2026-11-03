@@ -11,8 +11,11 @@ import { Onboarding } from './screens/Onboarding'
 import { PracticePage } from './screens/PracticePage'
 import { PracticeSession } from './screens/PracticeSession'
 import { ProfilePage } from './screens/ProfilePage'
+import { PublicSite } from './screens/public/PublicSite'
 import { ReadingPage } from './screens/ReadingPage'
 import { ReviewPage } from './screens/ReviewPage'
+import { SectionTestPage } from './screens/SectionTestPage'
+import { SectionsPage } from './screens/SectionsPage'
 import { ShopPage } from './screens/ShopPage'
 import { ThemeStudioPage } from './screens/ThemeStudioPage'
 import { UnitReviewPage } from './screens/UnitReviewPage'
@@ -31,6 +34,8 @@ function Remount({ param, children }: { param: string; children: ReactNode }) {
 
 export function App() {
   const onboarded = useStore((s) => s.onboarded)
+  const signedIn = useStore((s) => !!s.account)
+  const guest = useStore((s) => s.guest)
   const activeLang = useStore((s) => s.activeLang)
   const reconcileStreak = useStore((s) => s.reconcileStreak)
 
@@ -48,17 +53,20 @@ export function App() {
   useEffect(() => startAutoSync(), [])
   usePresence()
 
-  if (!onboarded)
-    return (
-      <>
-        <ThemeApplier />
-        <Onboarding />
-      </>
-    )
-
+  // Visitors see the website and sign up or log in first; new accounts then pick a course.
+  // (Device-only "guest" use is offered only when the server can't hold accounts.)
+  // One router for all three, so logging in from a deep link can continue to it.
   return (
     <BrowserRouter>
       <ThemeApplier />
+      {!signedIn && !guest ? <PublicSite /> : !onboarded ? <Onboarding /> : <MainApp />}
+    </BrowserRouter>
+  )
+}
+
+function MainApp() {
+  return (
+    <>
       <NotificationsWatcher />
       <Toaster />
       <Routes>
@@ -66,10 +74,12 @@ export function App() {
         <Route path="/reading/:readingId" element={<Remount param="readingId"><ReadingPage /></Remount>} />
         <Route path="/unit-review/:unitId" element={<Remount param="unitId"><UnitReviewPage /></Remount>} />
         <Route path="/conversation" element={<ConversationPage />} />
+        <Route path="/section-test/:index" element={<Remount param="index"><SectionTestPage /></Remount>} />
         <Route path="/practice/:mode" element={<Remount param="mode"><PracticeSession /></Remount>} />
         <Route element={<Shell />}>
           <Route index element={<Home />} />
           <Route path="/review" element={<ReviewPage />} />
+          <Route path="/sections" element={<SectionsPage />} />
           <Route path="/practice" element={<PracticePage />} />
           <Route path="/friends" element={<FriendsPage />} />
           <Route path="/friends/chat/:userId" element={<FriendChatPage />} />
@@ -83,6 +93,6 @@ export function App() {
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </BrowserRouter>
+    </>
   )
 }

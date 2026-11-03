@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AccountPanel } from '../components/AccountPanel'
+import { Icon } from '../components/Icon'
 import { NameTag } from '../components/NameTag'
+import { ResetDialog, type ResetMode } from '../components/ResetDialog'
 import { PageHeader } from '../components/PageHeader'
 import { cosmeticsOf, levelFromXp } from '../shop/catalog'
 import { DAILY_GOALS } from '../config'
@@ -34,6 +36,7 @@ function Heatmap({ xpByDay, frozen, goal }: { xpByDay: Record<string, number>; f
 export function ProfilePage() {
   const s = useStore()
   const [name, setName] = useState(s.name)
+  const [reset, setReset] = useState<ResetMode | null>(null)
   const totalXp = Object.values(s.xpByDay).reduce((a, b) => a + b, 0)
 
   return (
@@ -165,16 +168,33 @@ export function ProfilePage() {
         </div>
       </section>
 
-      <section>
-        <button
-          className="btn btn-danger"
-          onClick={() => {
-            if (confirm('Erase all progress, streaks and friends on this device?')) s.resetAll()
-          }}
-        >
-          Reset all progress
-        </button>
-      </section>
+      {/* Kept out of the way: folded up, and each action asks for a typed confirmation. */}
+      <details className="advanced">
+        <summary>
+          <Icon name="slow" size={16} /> Advanced
+        </summary>
+        <div className="advanced-body">
+          <div className="advanced-row">
+            <div className="grow">
+              <strong>Restart a course</strong>
+              <span className="small muted">Start a course from lesson 1. Your XP, streak and coins stay.</span>
+            </div>
+            <button className="btn btn-danger small" onClick={() => setReset('course')}>
+              Restart…
+            </button>
+          </div>
+          <div className="advanced-row">
+            <div className="grow">
+              <strong>Erase all progress</strong>
+              <span className="small muted">Delete every course, your XP, streak, coins and shop items.</span>
+            </div>
+            <button className="btn btn-danger small" onClick={() => setReset('everything')}>
+              Erase…
+            </button>
+          </div>
+        </div>
+      </details>
+      {reset && <ResetDialog mode={reset} onClose={() => setReset(null)} />}
     </div>
   )
 }

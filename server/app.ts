@@ -188,6 +188,37 @@ app.post('/sync', requireUser, async (c) => {
   return c.json(snapshot)
 })
 
+/* ---------- Resetting progress ---------- */
+
+// { lang } restarts one course (its lessons and review history; XP, coins and streak stay).
+// {} erases everything Lingora stores for you. Your account, friends and chats are
+// shared with Wordle Unlimited and are never touched.
+app.post('/progress/reset', requireUser, async (c) => {
+  const uid = c.get('userId')
+  const body = await c.req.json().catch(() => ({}))
+  const lang = body.lang === undefined ? null : LANGS.includes(body.lang) ? (body.lang as LangCode) : fail(400, 'Unknown course.')
+  rateLimit(c, `reset:${uid}`, 10, 3_600_000, 'Too many resets. Try again later.')
+  const s = db()
+  await s.transaction(
+    lang
+      ? [
+          s`delete from lingora_review_logs where user_id = ${uid} and lang = ${lang}`,
+          s`delete from lingora_card_imports where user_id = ${uid} and lang = ${lang}`,
+          s`delete from lingora_completions where user_id = ${uid} and lang = ${lang}`,
+        ]
+      : [
+          s`delete from lingora_review_logs where user_id = ${uid}`,
+          s`delete from lingora_card_imports where user_id = ${uid}`,
+          s`delete from lingora_completions where user_id = ${uid}`,
+          s`delete from lingora_xp_events where user_id = ${uid}`,
+          s`delete from lingora_purchases where user_id = ${uid}`,
+          s`delete from lingora_daily_claims where user_id = ${uid}`,
+          s`update lingora_profiles set prefs = '{}'::jsonb where user_id = ${uid}`,
+        ],
+  )
+  return c.json({ ok: true })
+})
+
 /* ---------- Friends, chats and groups: server/social.ts ---------- */
 registerSocialRoutes(app)
 

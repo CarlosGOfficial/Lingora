@@ -34,8 +34,12 @@ export interface SessionInput {
   xp: number
   ratings: Record<string, Rating>
   lessonId?: string
+  /** Several lessons at once (passing a section's "jump here" test completes everything before it). */
+  lessonIds?: string[]
   readingId?: string
 }
+
+const lessonIdsOf = (s: SessionInput) => [...new Set([...(s.lessonId ? [s.lessonId] : []), ...(s.lessonIds ?? [])])]
 
 export interface Appearance {
   theme: ThemeChoice
@@ -65,8 +69,11 @@ interface State {
   syncError: string | null
   shop: ShopLog
   appearance: Appearance
+  /** Using Lingora without an account (only offered when the server can't hold accounts). */
+  guest: boolean
 
   onboard(name: string, lang: LangCode, dailyGoal: number): void
+  setGuest(guest: boolean): void
   setActiveLang(lang: LangCode): void
   recordSession(input: SessionInput): void
   reconcileStreak(): void
@@ -77,6 +84,10 @@ interface State {
   setDailyGoal(xp: number): void
   setName(name: string): void
   resetAll(): void
+  /** Clears one course's lessons and reviews on this device (XP, streak and coins stay). */
+  restartCourse(lang: LangCode): void
+  /** Clears all progress on this device but stays signed in; the course setup runs again. */
+  eraseProgress(): void
   /** Returns an error message, or null when bought. */
   buyItem(itemId: string): string | null
   /** Returns the coins received, or null if already claimed today. */
@@ -111,6 +122,7 @@ const initial = () => ({
     custom: DEFAULT_CUSTOM_THEME,
     equipped: { title: 'tt_learner', celebration: 'ce_confetti' },
   } as Appearance,
+  guest: false,
 })
 
 export const useStore = create<State>()(
@@ -122,16 +134,22 @@ export const useStore = create<State>()(
         set({ onboarded: true, name: name.trim() || 'Learner', activeLang: lang, languages: [lang], dailyGoal })
       },
 
+      setGuest(guest) {
+        set({ guest })
+      },
+
       setActiveLang(lang) {
         const { languages } = get()
         set({ activeLang: lang, languages: languages.includes(lang) ? languages : [...languages, lang] })
       },
 
-      recordSession({ lang, xp, ratings, lessonId, readingId }) {
+      recordSession(input) {
+        const { lang, xp, ratings, readingId } = input
         const now = Date.now()
         const today = dayKey()
         const state = get()
         const prog = state.progress[lang]
+        const newLessons = lessonIdsOf(input).filter((id) => !prog.completedLessons.includes(id))
         const cards = { ...prog.cards }
         for (const [itemId, rating] of Object.entries(ratings)) {
           const prev = cards[itemId] ?? { ...newCard(now), itemId }
@@ -143,14 +161,14 @@ export const useStore = create<State>()(
             [lang]: {
               cards,
               xp: prog.xp + xp,
-              completedLessons: lessonId && !prog.completedLessons.includes(lessonId) ? [...prog.completedLessons, lessonId] : prog.completedLessons,
+              completedLessons: newLessons.length ? [...prog.completedLessons, ...newLessons] : prog.completedLessons,
               completedReadings:
                 readingId && !prog.completedReadings.includes(readingId) ? [...prog.completedReadings, readingId] : prog.completedReadings,
             },
           },
           xpByDay: { ...state.xpByDay, [today]: (state.xpByDay[today] ?? 0) + xp },
           streak: bump(state.streak, today),
-          outbox: state.account ? queueEvents(state.outbox, state.deviceId, now, today, { lang, xp, ratings, lessonId, readingId }) : state.outbox,
+          outbox: state.account ? queueEvents(state.outbox, state.deviceId, now, today, input) : state.outbox,
         })
       },
 
@@ -191,6 +209,20 @@ export const useStore = create<State>()(
 
       resetAll() {
         set(initial())
+      },
+
+      restartCourse(lang) {
+        const s = get()
+        const other = <T extends { lang: LangCode }>(list: T[]) => list.filter((e) => e.lang !== lang)
+        set({
+          progress: { ...s.progress, [lang]: { ...emptyLang(), xp: s.progress[lang].xp } },
+          outbox: { ...s.outbox, reviews: other(s.outbox.reviews), completions: other(s.outbox.completions), imports: other(s.outbox.imports) },
+        })
+      },
+
+      eraseProgress() {
+        const s = get()
+        set({ ...initial(), account: s.account, deviceId: s.deviceId, settings: s.settings, guest: s.guest, name: s.name })
       },
 
       buyItem(itemId) {
@@ -272,7 +304,7 @@ function queueEvents(outbox: Outbox, deviceId: string, now: number, today: strin
     xp: [...outbox.xp, { id: `${id}-xp`, lang: s.lang, xp: s.xp, day: today, at: now }],
     completions: [
       ...outbox.completions,
-      ...(s.lessonId ? [{ refId: s.lessonId, lang: s.lang, kind: 'lesson' as const, at: now }] : []),
+      ...lessonIdsOf(s).map((refId) => ({ refId, lang: s.lang, kind: 'lesson' as const, at: now })),
       ...(s.readingId ? [{ refId: s.readingId, lang: s.lang, kind: 'reading' as const, at: now }] : []),
     ],
   }

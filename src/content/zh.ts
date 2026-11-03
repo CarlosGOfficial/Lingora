@@ -1,5 +1,6 @@
 import { addLessons, insertUnits } from './extend'
 import { zhMoreUnits } from './zh-units-more'
+import { zhSectionUnits } from './zh-units-sections'
 import type { Course, Item } from './types'
 import { zhMoreLessons } from './zh-more'
 import { zhTier23Units } from './zh-tier2-3'
@@ -362,5 +363,5 @@ export const zh: Course = {
       },
     },
     ...zhTier23Units,
-  ], zhMoreLessons), zhMoreUnits),
+  ], zhMoreLessons), [...zhMoreUnits, ...zhSectionUnits]),
 }

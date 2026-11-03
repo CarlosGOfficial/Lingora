@@ -8,10 +8,13 @@ import { ptTier23Grammar } from './pt-tier2-3'
 import { zhTier23Grammar } from './zh-tier2-3'
 import { jaMoreGrammar } from './ja-more'
 import { jaMoreUnitsGrammar } from './ja-units-more'
+import { jaSectionUnitsGrammar } from './ja-units-sections'
 import { ptMoreGrammar } from './pt-more'
 import { ptMoreUnitsGrammar } from './pt-units-more'
+import { ptSectionUnitsGrammar } from './pt-units-sections'
 import { zhMoreGrammar } from './zh-more'
 import { zhMoreUnitsGrammar } from './zh-units-more'
+import { zhSectionUnitsGrammar } from './zh-units-sections'
 import type { Course, GrammarPoint, Item, LangCode, Lesson, Reading, Unit } from './types'
 import { zh } from './zh'
 
@@ -24,14 +27,17 @@ export const GRAMMAR: Record<string, GrammarPoint[]> = {
   ...zhTier23Grammar,
   ...zhMoreGrammar,
   ...zhMoreUnitsGrammar,
+  ...zhSectionUnitsGrammar,
   ...jaGrammar,
   ...jaTier23Grammar,
   ...jaMoreGrammar,
   ...jaMoreUnitsGrammar,
+  ...jaSectionUnitsGrammar,
   ...ptGrammar,
   ...ptTier23Grammar,
   ...ptMoreGrammar,
   ...ptMoreUnitsGrammar,
+  ...ptSectionUnitsGrammar,
 }
 
 export function getGrammar(lessonId: string): GrammarPoint[] {
