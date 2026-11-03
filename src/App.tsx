@@ -25,6 +25,7 @@ import { useStore } from './store/useStore'
 import { NotificationsWatcher } from './social/NotificationsWatcher'
 import { usePresence } from './social/useFriends'
 import { Toaster } from './components/Toaster'
+import { refreshPush } from './lib/push'
 import { startAutoSync } from './sync/sync'
 
 /** Session screens hold state; give each lesson/story/mode a fresh instance. */
@@ -51,6 +52,10 @@ export function App() {
   }, [activeLang])
 
   useEffect(() => startAutoSync(), [])
+  const accountId = useStore((s) => s.account?.id)
+  useEffect(() => {
+    if (accountId) void refreshPush()
+  }, [accountId])
   usePresence()
 
   // Visitors see the website and sign up or log in first; new accounts then pick a course.

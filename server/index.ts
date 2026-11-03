@@ -3,6 +3,7 @@ import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
 import { app } from './app'
 import { DATABASE_URL, IS_PROD, PORT } from './env'
+import { ensurePushTable } from './push'
 
 const root = new Hono()
 root.route('/', app)
@@ -15,6 +16,9 @@ if (IS_PROD) {
   root.use('*', serveStatic({ root: './dist' }))
   root.get('*', serveStatic({ path: './dist/index.html' }))
 }
+
+// The push table is shared with Banter and Wordle; make sure it exists.
+void ensurePushTable()
 
 serve({ fetch: root.fetch, port: PORT }, (info) => {
   console.log(`API listening on http://localhost:${info.port}`)

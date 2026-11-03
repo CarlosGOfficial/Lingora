@@ -4,6 +4,7 @@ import { useStore } from '../store/useStore'
 import { api } from '../sync/api'
 import { logOut, syncNow } from '../sync/sync'
 import { AuthForm, type AuthMode } from './AuthForm'
+import { PushToggle } from './PushToggle'
 
 type Server = 'checking' | 'ready' | 'no-db' | 'offline'
 
@@ -78,6 +79,7 @@ export function AccountPanel() {
             Log out
           </button>
         </div>
+        <PushToggle />
       </div>
     )
   }

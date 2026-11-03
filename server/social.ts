@@ -32,6 +32,7 @@ import { COURSES, allLessons } from '../src/content'
 import { levelFromXp } from '../src/shop/catalog'
 import { BIO_MAX, type CourseProgress, type Notifications, type ProfileRelation, type PublicProfile } from '../src/social/profile'
 import { currentUserId, db, fail, rateLimit, requireUser, str, type Env } from './http'
+import { clip, notify } from './push'
 
 /**
  * Friends, private chats and group chats. Everything lives in Wordle Unlimited's tables,
@@ -198,7 +199,18 @@ async function postToGroup(s: Sql, groupId: number, fromUserId: string | null, c
     returning id, from_user_id, content, created_at, reply_to_id, edited_at, deleted_at`
   await s`update group_chats set last_message_at = ${m.created_at} where id = ${groupId}`
   // Your own messages count as read.
-  if (fromUserId) await s`update group_members set last_read_id = ${m.id}, notified_id = ${m.id} where group_id = ${groupId} and user_id = ${fromUserId}`
+  if (fromUserId) {
+    await s`update group_members set last_read_id = ${m.id}, notified_id = ${m.id} where group_id = ${groupId} and user_id = ${fromUserId}`
+    const [[g], members, [sender]] = await Promise.all([
+      s`select name from group_chats where id = ${groupId}`,
+      s`select user_id from group_members where group_id = ${groupId}`,
+      s`select username, first_name from users where id = ${fromUserId}`,
+    ])
+    notify(members.map((r) => r.user_id as string).filter((id) => id !== fromUserId), {
+      kind: 'chat', title: (g?.name as string) ?? 'Group chat', body: clip(`${sender ? displayName(sender) : 'Someone'}: ${messagePreview(content)}`), tag: `group:${groupId}`,
+      url: { banter: `/chats/group/${groupId}`, wordle: '/', lingora: `/friends/group/${groupId}` },
+    })
+  }
   return m
 }
 
@@ -352,6 +364,8 @@ export function registerSocialRoutes(app: Hono<Env, any, any>) {
     }
     try {
       await s`insert into friendships (requester_id, addressee_id) values (${uid}, ${target.id})`
+      const [meRow] = await s`select username, first_name from users where id = ${uid}`
+      notify([target.id as string], { kind: 'chat', title: 'New friend request', body: `${meRow ? displayName(meRow) : 'Someone'} wants to be friends.`, tag: `fr:${uid}`, url: { banter: '/chats/friends', wordle: '/', lingora: '/friends' } })
     } catch (e) {
       if ((e as { code?: string }).code === '23505') fail(409, 'Request already sent.')
       throw e
@@ -407,6 +421,11 @@ export function registerSocialRoutes(app: Hono<Env, any, any>) {
     const content = await chatContent(s, me, body)
     const replyToId = await replyTarget(s, { kind: 'dm', me, them }, body.replyToId)
     const [m] = await s`insert into direct_messages (from_user_id, to_user_id, content, reply_to_id) values (${me}, ${them}, ${content}, ${replyToId}) returning *`
+    const [sender] = await s`select username, first_name from users where id = ${me}`
+    notify([them], {
+      kind: 'chat', title: sender ? displayName(sender) : 'New message', body: clip(messagePreview(content)), tag: `dm:${me}`,
+      url: { banter: `/chats/dm/${me}`, wordle: '/', lingora: `/friends/chat/${me}` },
+    })
     return c.json((await decorate(s, 'dm', [m], me))[0])
   })
 

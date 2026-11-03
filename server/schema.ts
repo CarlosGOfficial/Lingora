@@ -12,6 +12,8 @@
  * daily claims) rather than mutable state. Every device replays the same log, so
  * syncing never overwrites newer work.
  */
+import { PUSH_SCHEMA } from './push'
+
 export const SCHEMA: string[] = [
   /* ---- Shared with Wordle Unlimited (created only if missing) ---- */
   `create table if not exists users (
@@ -175,4 +177,6 @@ export const SCHEMA: string[] = [
     at_ms bigint not null,
     primary key (user_id, day)
   )`,
+  // Push notifications, shared with Banter and Wordle (server/push.ts).
+  ...PUSH_SCHEMA,
 ]

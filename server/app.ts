@@ -13,6 +13,7 @@ import { chatEnabled, chatTurn, validateChat } from './chat'
 import { sql, type Sql } from './db'
 import { IS_PROD } from './env'
 import { FailureLimiter, SESSION_COOKIE, clientIp, currentUserId, db, fail, rateLimit, requireUser, str, type Env } from './http'
+import { registerPushRoutes } from './push'
 import { registerSocialRoutes } from './social'
 
 const SESSION_DAYS = 30
@@ -245,6 +246,7 @@ app.post('/progress/reset', requireUser, async (c) => {
 
 /* ---------- Friends, chats and groups: server/social.ts ---------- */
 registerSocialRoutes(app)
+registerPushRoutes(app)
 
 /* ---------- Saved themes (the same table and shape as Wordle Unlimited) ---------- */
 

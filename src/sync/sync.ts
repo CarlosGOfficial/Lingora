@@ -5,6 +5,7 @@ import { useStore, type Appearance } from '../store/useStore'
 import { isCustomTheme } from '../theme/themes'
 import { ApiError, api } from './api'
 import { derive } from './derive'
+import { disablePush } from '../lib/push'
 import { emptyOutbox, type Account, type Outbox, type Prefs } from './types'
 
 let inFlight: Promise<void> | null = null
@@ -169,6 +170,8 @@ export async function eraseAllProgress() {
 /** Signing out clears this device so the next person starts fresh. */
 export async function logOut() {
   await syncNow()
+  // Stop notifications for this account on this device.
+  await disablePush().catch(() => {})
   await api.logout().catch(() => {})
   useStore.getState().resetAll()
 }
