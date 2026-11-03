@@ -32,6 +32,30 @@ export function rateLimit(c: Context, bucket: string, max: number, windowMs: num
   else if (++h.n > max) fail(429, message)
 }
 
+/**
+ * Counts failures only (for PIN sign-in): blocked once `max` failures happened within
+ * the window. In memory, so it resets on restart; that's fine for slowing down guessing.
+ */
+export class FailureLimiter {
+  private hits = new Map<string, number[]>()
+  constructor(private max: number, private windowMs: number) {}
+  private recent(key: string) {
+    const cutoff = Date.now() - this.windowMs
+    const list = (this.hits.get(key) ?? []).filter((t) => t > cutoff)
+    if (list.length) this.hits.set(key, list)
+    else this.hits.delete(key)
+    return list
+  }
+  blocked(key: string) {
+    return this.recent(key).length >= this.max
+  }
+  fail(key: string) {
+    this.hits.set(key, [...this.recent(key), Date.now()])
+  }
+}
+
+export const clientIp = (c: Context) => c.req.header('x-forwarded-for')?.split(',')[0].trim() ?? 'local'
+
 /* ---------- Sessions ---------- */
 export const requireUser = createMiddleware<Env>(async (c, next) => {
   const token = getCookie(c, SESSION_COOKIE)

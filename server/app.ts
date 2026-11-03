@@ -12,7 +12,7 @@ import { USERNAME_RE, hashPassword, hashToken, newSessionToken, verifyPassword }
 import { chatEnabled, chatTurn, validateChat } from './chat'
 import { sql, type Sql } from './db'
 import { IS_PROD } from './env'
-import { SESSION_COOKIE, currentUserId, db, fail, rateLimit, requireUser, str, type Env } from './http'
+import { FailureLimiter, SESSION_COOKIE, clientIp, currentUserId, db, fail, rateLimit, requireUser, str, type Env } from './http'
 import { registerSocialRoutes } from './social'
 
 const SESSION_DAYS = 30
@@ -48,9 +48,11 @@ async function isAdmin(userId: string | null): Promise<boolean> {
 }
 
 async function account(userId: string): Promise<Account> {
-  const rows = await db()`select u.id, u.username, p.prefs from users u left join lingora_profiles p on p.user_id = u.id where u.id = ${userId}`
+  const rows = await db()`select u.id, u.username, u.first_name, u.pin, u.password_hash is not null as has_password, p.prefs
+    from users u left join lingora_profiles p on p.user_id = u.id where u.id = ${userId}`
   if (!rows.length) fail(401, 'Account not found.')
-  return { id: rows[0].id, username: rows[0].username ?? 'Learner', prefs: (rows[0].prefs ?? {}) as Prefs }
+  const r = rows[0]
+  return { id: r.id, username: r.username ?? r.first_name ?? 'Learner', prefs: (r.prefs ?? {}) as Prefs, pin: r.pin ?? null, hasPassword: !!r.has_password }
 }
 
 /** Every account needs a unique 4-digit PIN in Wordle Unlimited (its PIN login). */
@@ -97,6 +99,28 @@ app.post('/auth/login', async (c) => {
   // Hash even when there's no match, so timing doesn't reveal which usernames exist.
   const ok = stored ? await verifyPassword(password, stored) : (await hashPassword(password), false)
   if (!ok) fail(401, 'Wrong username or password.')
+  await startSession(c, rows[0].id as string)
+  return c.json(await account(rows[0].id as string))
+})
+
+// Wordle Unlimited's 4-digit PIN sign-in (same rules as Wordle and Banter). PINs are short,
+// so wrong guesses are capped per network and across the whole site.
+const pinFailsPerIp = new FailureLimiter(5, 15 * 60_000)
+const pinFailsGlobal = new FailureLimiter(100, 60 * 60_000)
+
+app.post('/auth/login-pin', async (c) => {
+  const ip = clientIp(c)
+  if (pinFailsPerIp.blocked(ip)) fail(429, 'Too many wrong PINs. Try again in 15 minutes.')
+  if (pinFailsGlobal.blocked('all')) fail(429, 'PIN sign-in is paused for now. Log in with your username and password.')
+  const body = await c.req.json().catch(() => ({}))
+  const pin = str(body.pin).trim()
+  if (!/^\d{4}$/.test(pin)) fail(400, 'PINs are 4 digits.')
+  const rows = await db()`select id from users where pin = ${pin}`
+  if (!rows.length) {
+    pinFailsPerIp.fail(ip)
+    pinFailsGlobal.fail('all')
+    fail(401, 'Wrong PIN.')
+  }
   await startSession(c, rows[0].id as string)
   return c.json(await account(rows[0].id as string))
 })

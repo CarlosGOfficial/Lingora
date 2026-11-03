@@ -38,6 +38,7 @@ export const api = {
   me: () => request<Account>('/me'),
   signup: (body: { username: string; password: string }) => request<Account>('/auth/signup', { body }),
   login: (body: { username: string; password: string }) => request<Account>('/auth/login', { body }),
+  loginPin: (pin: string) => request<Account>('/auth/login-pin', { body: { pin } }),
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   sync: (body: SyncRequest) => request<Snapshot>('/sync', { body }),
   resetProgress: (lang?: LangCode) => request<{ ok: boolean }>('/progress/reset', { body: lang ? { lang } : {}, method: 'POST' }),

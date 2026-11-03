@@ -58,6 +58,10 @@ export interface Account {
   id: string
   username: string
   prefs: Prefs
+  /** Wordle Unlimited's 4-digit sign-in PIN (works in Lingora too). */
+  pin?: string | null
+  /** False for PIN-only accounts (they can add a password in Wordle Unlimited or Banter). */
+  hasPassword?: boolean
 }
 
 export interface SyncRequest {

@@ -7,6 +7,20 @@ import { AuthForm, type AuthMode } from './AuthForm'
 
 type Server = 'checking' | 'ready' | 'no-db' | 'offline'
 
+/** Your Wordle PIN, hidden until you tap it. */
+function PinRow({ pin }: { pin: string }) {
+  const [shown, setShown] = useState(false)
+  return (
+    <div className="small">
+      Wordle PIN:{' '}
+      <button type="button" className="link-btn" onClick={() => setShown(!shown)} title={shown ? 'Hide' : 'Show'}>
+        <strong style={{ letterSpacing: shown ? '0.2em' : undefined }}>{shown ? pin : '•••• (tap to show)'}</strong>
+      </button>
+      <span className="muted"> · signs you in to Lingora, Wordle Unlimited and Banter</span>
+    </div>
+  )
+}
+
 export function AccountPanel() {
   const { account, lastSyncedAt, syncError, outbox } = useStore()
   const [server, setServer] = useState<Server>('checking')
@@ -40,6 +54,10 @@ export function AccountPanel() {
         <div>
           Signed in as <strong>{account.username}</strong>
         </div>
+        {account.pin && <PinRow pin={account.pin} />}
+        {account.hasPassword === false && (
+          <p className="small muted" style={{ margin: 0 }}>This account only has a PIN. Add a username and password in Wordle Unlimited or Banter to sign in with them here too.</p>
+        )}
         <div className="muted small">
           {lastSyncedAt ? `Last synced ${formatAgo(lastSyncedAt)}` : 'Not synced yet'}
           {pending > 0 && ` · ${pending} change${pending === 1 ? '' : 's'} waiting`}

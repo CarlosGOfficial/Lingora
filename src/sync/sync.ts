@@ -136,6 +136,11 @@ export async function logIn(username: string, password: string) {
   await afterAuth(await api.login({ username, password }), true)
 }
 
+/** Sign in with the 4-digit PIN from Wordle Unlimited. */
+export async function logInWithPin(pin: string) {
+  await afterAuth(await api.loginPin(pin), true)
+}
+
 /**
  * Starts a course over. Signed in, the server's history for it is deleted too (after
  * pushing anything still queued), so the next sync can't bring it back.
