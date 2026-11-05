@@ -15,6 +15,14 @@ export interface CourseProgress {
   level: string | null
 }
 
+export type BanterLook = {
+  banner: { css: string } | { image: string }
+  accent: string
+  card: string | null
+  status: { emoji: string; text: string } | null
+  pronouns: string | null
+}
+
 /** A public profile, like Wordle Unlimited's, with Lingora stats instead of game stats. */
 export interface PublicProfile extends ChatPerson {
   isAdmin: boolean
@@ -23,6 +31,8 @@ export interface PublicProfile extends ChatPerson {
   online: boolean
   /** Which apps they have open right now. */
   openIn?: ('lingora' | 'banter' | 'wordle')[]
+  /** How they've styled their Banter profile (null if they've never opened Banter). */
+  banter?: BanterLook | null
   lastSeen: string | null
   friends: number
   relation: ProfileRelation

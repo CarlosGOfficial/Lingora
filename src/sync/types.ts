@@ -82,6 +82,7 @@ export interface Snapshot {
 export interface LeaderboardRow {
   id: string
   username: string
+  avatar?: string | null
   weeklyXp: number
   streak: number
   lang: LangCode
@@ -102,6 +103,8 @@ export interface Friend extends FriendCard {
   unread: number
   /** Has opened Lingora (only they appear on the leaderboard). */
   onLingora: boolean
+  /** Has opened Banter, the chat app. */
+  onBanter?: boolean
 }
 
 export interface FriendRequest extends FriendCard {

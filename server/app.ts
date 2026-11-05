@@ -15,6 +15,7 @@ import { IS_PROD } from './env'
 import { FailureLimiter, SESSION_COOKIE, clientIp, currentUserId, db, fail, rateLimit, requireUser, str, type Env } from './http'
 import { registerPushRoutes } from './push'
 import { registerSocialRoutes } from './social'
+import { registerBanterRoutes } from './banter'
 
 const SESSION_DAYS = 30
 const LANGS: LangCode[] = ['zh', 'ja', 'pt']
@@ -246,6 +247,7 @@ app.post('/progress/reset', requireUser, async (c) => {
 
 /* ---------- Friends, chats and groups: server/social.ts ---------- */
 registerSocialRoutes(app)
+registerBanterRoutes(app)
 registerPushRoutes(app)
 
 /* ---------- Saved themes (the same table and shape as Wordle Unlimited) ---------- */

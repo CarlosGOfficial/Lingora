@@ -7,6 +7,8 @@ import { dayKey } from '../lib/date'
 import { onlineText, timeAgo } from '../lib/time'
 import { BIO_MAX, type PublicProfile } from '../social/profile'
 import { refreshFriends } from '../social/useFriends'
+import { useAppLinks } from '../social/apps'
+import { Avatar } from '../components/chat/ChatPanel'
 import { api } from '../sync/api'
 
 /** Someone's public profile (opened from leaderboards, friend lists and chats). */
@@ -38,25 +40,31 @@ export function UserProfilePage() {
   if (!p) return <div className="stack">{back}<p className="muted">Loading…</p></div>
 
   const joined = p.joinedAt ? new Date(p.joinedAt).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : null
+  const look = p.banter
   return (
     <div className="stack profile-view">
       {back}
-      <section className="profile-card">
-        <span className="avatar big">
-          {p.username[0]?.toUpperCase()}
-          <i className={`presence ${p.online ? 'on' : ''}`} aria-label={p.online ? 'Online' : 'Offline'} />
-        </span>
+      {look && (
+        <div className="banter-banner" style={'image' in look.banner ? { backgroundImage: `url(${look.banner.image})` } : { background: look.banner.css }}>
+          <span className="banter-banner-tag">Banter profile</span>
+        </div>
+      )}
+      <section className={`profile-card ${look ? 'with-banner' : ''}`} style={look ? { ['--profile-accent' as string]: look.accent, ...(look.card ? { backgroundImage: look.card } : {}) } : undefined}>
+        <Avatar person={p} online={p.online} size="big" />
         <div className="grow person-text">
           <span className="row tight">
             <NameTag name={p.username} nameColor={p.nameColor} title={p.title} />
             {p.isAdmin && <span className="admin-badge">ADMIN</span>}
           </span>
           <span className={`small ${p.online ? 'c-success' : 'muted'}`}>{p.online ? onlineText(p, 'Online now') : p.lastSeen ? `Last online ${timeAgo(p.lastSeen)}` : 'Offline'}</span>
+          {look?.status && <span className="small banter-status">{look.status.emoji} {look.status.text}</span>}
           <span className="small muted">
+            {look?.pronouns && `${look.pronouns} · `}
             {joined && `Joined ${joined} · `}
             {p.friends} {p.friends === 1 ? 'friend' : 'friends'}
           </span>
         </div>
+        <BanterLink username={p.username} on={!!look} />
       </section>
       <Actions p={p} reload={load} />
       <Bio p={p} onSaved={load} />
@@ -262,5 +270,16 @@ function Bio({ p, onSaved }: { p: PublicProfile; onSaved: () => Promise<void> })
         </button>
       )}
     </div>
+  )
+}
+
+/** Their profile in Banter, where it can be customized (banner, status, colours). */
+function BanterLink({ username, on }: { username: string; on: boolean }) {
+  const links = useAppLinks()
+  if (!links?.banterUrl || !on) return null
+  return (
+    <a className="btn btn-ghost small" href={`${links.banterUrl}/u/${encodeURIComponent(username)}`} target="_blank" rel="noopener noreferrer">
+      View on Banter <Icon name="external" size={13} />
+    </a>
   )
 }

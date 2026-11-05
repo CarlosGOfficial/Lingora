@@ -26,35 +26,22 @@ import { Link } from 'react-router-dom'
 import { api } from '../../sync/api'
 import { Icon } from '../Icon'
 import { ProfileLink } from '../ProfileLink'
+import { Formatted, mentions } from './Formatted'
+import { useAppLinks } from '../../social/apps'
+import { useStore } from '../../store/useStore'
 
 // Pieces shared by friend chats and group chats (a port of Wordle Unlimited's ChatParts).
 
 export type Member = ChatPerson & { online?: boolean; lastReadId?: number }
 
-export function Avatar({ person, online, size = 'md' }: { person?: Pick<ChatPerson, 'username'> | null; online?: boolean; size?: 'xs' | 'sm' | 'md' }) {
+export function Avatar({ person, online, size = 'md' }: { person?: Pick<ChatPerson, 'username' | 'avatar'> | null; online?: boolean; size?: 'xs' | 'sm' | 'md' | 'big' }) {
+  const [broken, setBroken] = useState(false)
+  const pic = person?.avatar && !broken ? person.avatar : null
   return (
-    <span className={`avatar avatar-${size}`}>
-      {person?.username[0]?.toUpperCase() ?? '?'}
+    <span className={`avatar avatar-${size} ${size === 'big' ? 'big' : ''} ${pic ? 'has-pic' : ''}`}>
+      {pic ? <img src={pic} alt="" onError={() => setBroken(true)} /> : person?.username[0]?.toUpperCase() ?? '?'}
       {online !== undefined && <i className={`presence ${online ? 'on' : ''}`} aria-label={online ? 'Online' : 'Offline'} />}
     </span>
-  )
-}
-
-/** Text with web links made clickable. */
-function Linkified({ text }: { text: string }) {
-  const parts = text.split(/(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g)
-  return (
-    <>
-      {parts.map((p, i) =>
-        i % 2 === 1 ? (
-          <a key={i} href={p} target="_blank" rel="noopener noreferrer nofollow">
-            {p}
-          </a>
-        ) : (
-          <span key={i}>{p}</span>
-        ),
-      )}
-    </>
   )
 }
 
@@ -84,19 +71,76 @@ function MediaMessage({ src, alt, onLoad, giphy }: { src: string; alt: string; o
   )
 }
 
-/** Cards from Wordle Unlimited (game and party invites, clips) can only be opened there. */
-function WordleCard({ icon, title, text }: { icon: string; title: string; text: string }) {
+/** Cards from Wordle Unlimited (game and party invites, clips) open there. */
+function WordleCard({ icon, title, text, href, action }: { icon: string; title: string; text: string; href?: string; action?: string }) {
   return (
     <div className="wordle-card">
       <strong>
         {icon} {title}
       </strong>
       <span className="muted small">{text}</span>
+      {href && (
+        <a className="btn btn-primary small app-card-btn" href={href} target="_blank" rel="noopener noreferrer">
+          {action ?? 'Open'} <Icon name="external" size={14} />
+        </a>
+      )}
     </div>
   )
 }
 
-export function MessageBody({ content, mine, sender, onMediaLoad }: { content: string; mine: boolean; sender: string; onMediaLoad?: () => void }) {
+type BanterInvite = { name: string; color: string; emoji: string | null; icon: string | null; banner: string | null; members: number; joined: boolean; url: string }
+
+/** A Banter server invite link: the server's name, icon and size, and a button to join it in Banter. */
+function BanterInviteCard({ code, mine, sender }: { code: string; mine: boolean; sender: string }) {
+  const [inv, setInv] = useState<BanterInvite | null | undefined>(undefined)
+  useEffect(() => {
+    let live = true
+    fetch(`/api/banter/invites/${encodeURIComponent(code)}`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((v) => live && setInv(v))
+      .catch(() => live && setInv(null))
+    return () => { live = false }
+  }, [code])
+  return (
+    <div className="banter-card">
+      {inv?.banner && <img className="banter-card-banner" src={inv.banner} alt="" />}
+      <div className="banter-card-body">
+        <span className="banter-card-label">{mine ? 'You sent a Banter server invite' : `${sender} invited you to a Banter server`}</span>
+        {inv === undefined ? <span className="muted small">Loading…</span> : !inv ? <span className="muted small">That invite has expired.</span> : (
+          <>
+            <div className="banter-card-head">
+              {inv.icon ? <img className="banter-card-icon" src={inv.icon} alt="" /> : (
+                <span className="banter-card-icon" style={{ background: inv.color }}>{inv.emoji ?? inv.name.slice(0, 1).toUpperCase()}</span>
+              )}
+              <span className="banter-card-name">
+                <strong>{inv.name}</strong>
+                <span className="muted small">{inv.members} {inv.members === 1 ? 'member' : 'members'}</span>
+              </span>
+            </div>
+            <a className="btn btn-primary small app-card-btn" href={inv.url} target="_blank" rel="noopener noreferrer">
+              {inv.joined ? 'Open in Banter' : 'Join on Banter'} <Icon name="external" size={14} />
+            </a>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Banter invite codes in a message (links to the Banter site's /invite/<code>). */
+function banterInvites(text: string, banterUrl: string | undefined): string[] {
+  if (!banterUrl) return []
+  let origin = ''
+  try { origin = new URL(banterUrl).origin } catch { return [] }
+  const out: string[] = []
+  for (const m of text.matchAll(/https?:\/\/[^\s/]+\/invite\/([A-Za-z0-9]{4,16})\b/g)) {
+    try { if (new URL(m[0]).origin === origin && !out.includes(m[1])) out.push(m[1]) } catch { /* not a link */ }
+  }
+  return out
+}
+
+export function MessageBody({ content, mine, sender, me, onMediaLoad }: { content: string; mine: boolean; sender: string; me?: string | null; onMediaLoad?: () => void }) {
+  const links = useAppLinks()
   const img = imageId(content)
   const gif = gifId(content)
   const clip = sharedClip(content)
@@ -104,13 +148,22 @@ export function MessageBody({ content, mine, sender, onMediaLoad }: { content: s
   const party = partyCode(content)
   if (img) return <MediaMessage src={chatImageUrl(img)} alt="Photo" onLoad={onMediaLoad} />
   if (gif) return <MediaMessage src={giphyUrl(gif)} alt="GIF" onLoad={onMediaLoad} giphy />
-  if (clip) return <WordleCard icon="🎬" title={clip.title} text={`${mine ? 'You' : sender} shared a clip — watch it in Wordle Unlimited.`} />
-  if (party) return <WordleCard icon="🍿" title="Watch party" text={`${mine ? 'You' : sender} started a watch party — join in Wordle Unlimited.`} />
-  if (code) return <WordleCard icon="🎮" title="Game invite" text={`${mine ? 'You' : sender} invited ${mine ? 'them' : 'you'} to game ${code} — join in Wordle Unlimited.`} />
+  const w = links?.wordleUrl
+  if (clip) return <WordleCard icon="🎬" title={clip.title} text={`${mine ? 'You' : sender} shared a clip from Wordle Unlimited.`} href={w} action="Watch in Wordle" />
+  if (party) return <WordleCard icon="🍿" title="Watch party" text={`${mine ? 'You' : sender} started a watch party in Wordle Unlimited.`} href={w && `${w}/party/${party}`} action="Join the party" />
+  if (code) return <WordleCard icon="🎮" title="Game invite" text={`${mine ? 'You' : sender} invited ${mine ? 'them' : 'you'} to game ${code}.`} href={w && `${w}/room/${code}`} action="Join the game" />
+  const text = content.trimStart()
+  const invites = banterInvites(text, links?.banterUrl)
+  // Just an invite link: show only the card.
+  if (invites.length === 1 && text.replace(/https?:\/\/\S+\/invite\/[A-Za-z0-9]{4,16}/, '').trim() === '') return <BanterInviteCard code={invites[0]} mine={mine} sender={sender} />
+  const jumbo = text.length <= 27 && /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\p{Emoji_Modifier}|\u200d|\ufe0f|\s)+$/u.test(text) && /\p{Extended_Pictographic}/u.test(text)
   return (
-    <div className={`bubble ${mine ? 'me' : 'them'}`}>
-      <Linkified text={content.trimStart()} />
-    </div>
+    <>
+      <div className={`bubble ${mine ? 'me' : 'them'} ${jumbo ? 'jumbo' : ''} ${!mine && mentions(text, me ?? null) ? 'mentioned' : ''}`}>
+        <Formatted text={text} me={me ?? null} />
+      </div>
+      {invites.slice(0, 2).map((c) => <BanterInviteCard key={c} code={c} mine={mine} sender={sender} />)}
+    </>
   )
 }
 
@@ -377,6 +430,7 @@ export function ChatPanel({ kind, chat, meId, person, group, readers, placeholde
   emptyText?: string
 }) {
   const messages = chat.messages ?? []
+  const myName = useStore((st) => st.account?.username ?? null)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
   const [editing, setEditing] = useState<ChatMessage | null>(null)
@@ -499,7 +553,7 @@ export function ChatPanel({ kind, chat, meId, person, group, readers, placeholde
                     </button>
                   )}
                   <div className="msg-body" title={time} {...(m.deleted ? {} : pressHandlers(m))}>
-                    {m.deleted ? <div className="bubble deleted">Message deleted</div> : <MessageBody content={m.content} mine={m.mine} sender={name} onMediaLoad={mediaLoaded} />}
+                    {m.deleted ? <div className="bubble deleted">Message deleted</div> : <MessageBody content={m.content} mine={m.mine} sender={name} me={myName} onMediaLoad={mediaLoaded} />}
                   </div>
                   {m.reactions.length > 0 && (
                     <div className="reaction-row">

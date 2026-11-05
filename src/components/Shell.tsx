@@ -6,6 +6,7 @@ import { APP_NAME } from '../config'
 import { COURSES, LANG_CODES } from '../content'
 import { dueCards, liveStreak, todayXp, useStore } from '../store/useStore'
 import { Icon, type IconName } from './Icon'
+import { useAppLinks } from '../social/apps'
 
 const NAV: { to: string; label: string; icon: IconName }[] = [
   { to: '/', label: 'Learn', icon: 'home' },
@@ -45,6 +46,7 @@ export function Shell() {
             </NavLink>
           ))}
         </nav>
+        <OtherApps />
       </aside>
 
       <div className="main-col">
@@ -98,6 +100,27 @@ export function Shell() {
           </NavLink>
         ))}
       </nav>
+    </div>
+  )
+}
+
+/** The other two apps on the same account: chat and voice in Banter, games in Wordle Unlimited. */
+function OtherApps() {
+  const links = useAppLinks()
+  if (!links) return null
+  return (
+    <div className="other-apps">
+      <span className="other-apps-label">Same account</span>
+      <a href={links.banterUrl} target="_blank" rel="noopener noreferrer" className="other-app">
+        <span className="other-app-mark banter">B</span>
+        <span><strong>Banter</strong><span className="small muted">Chat, voice and servers</span></span>
+        <Icon name="external" size={13} />
+      </a>
+      <a href={links.wordleUrl} target="_blank" rel="noopener noreferrer" className="other-app">
+        <span className="other-app-mark wordle">W</span>
+        <span><strong>Wordle Unlimited</strong><span className="small muted">Play with friends</span></span>
+        <Icon name="external" size={13} />
+      </a>
     </div>
   )
 }

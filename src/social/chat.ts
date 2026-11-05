@@ -81,6 +81,8 @@ export interface ChatMessage {
 export interface ChatPerson {
   id: string
   username: string
+  /** Their Wordle profile picture (null: their initial). */
+  avatar?: string | null
   title: string | null
   nameColor: string | null
 }

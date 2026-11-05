@@ -20,6 +20,7 @@ import type { Friend, FriendRequest } from '../sync/types'
 interface Row {
   key: string
   name: string
+  avatar?: string | null
   weeklyXp: number
   streak: number
   lang: LangCode
@@ -37,7 +38,7 @@ export function FriendsPage() {
   return account ? <OnlineFriends /> : <LocalFriends />
 }
 
-/** Signed in: the friends list shared with Wordle Unlimited — requests, online status, chats. */
+/** Signed in: the friends list shared with Banter and Wordle Unlimited — requests, online status, chats. */
 function OnlineFriends() {
   const username = useStore((s) => s.account?.username ?? '')
   const meId = useStore((s) => s.account?.id ?? '')
@@ -56,7 +57,7 @@ function OnlineFriends() {
 
   return (
     <div className="stack">
-      <PageHeader icon="users" title="Friends" subtitle="Learn together. Your friends are shared with Wordle Unlimited." />
+      <PageHeader icon="users" title="Friends" subtitle="Learn together. Your friends and chats are shared with Banter and Wordle Unlimited." />
       <ShareCard label="Your username" value={username} />
 
       <AddForm
@@ -166,10 +167,11 @@ function OnlineFriends() {
   )
 }
 
-function Avatar({ name, online }: { name: string; online?: boolean }) {
+function Avatar({ name, online, pic }: { name: string; online?: boolean; pic?: string | null }) {
+  const [broken, setBroken] = useState(false)
   return (
-    <span className="avatar">
-      {name[0]?.toUpperCase()}
+    <span className={`avatar ${pic && !broken ? 'has-pic' : ''}`}>
+      {pic && !broken ? <img src={pic} alt="" onError={() => setBroken(true)} /> : name[0]?.toUpperCase()}
       {online !== undefined && <i className={`presence ${online ? 'on' : ''}`} aria-label={online ? 'Online' : 'Offline'} />}
     </span>
   )
@@ -178,7 +180,7 @@ function Avatar({ name, online }: { name: string; online?: boolean }) {
 function PersonRow({ person, sub, children, highlight, dashed }: { person: FriendRequest; sub: ReactNode; children: ReactNode; highlight?: boolean; dashed?: boolean }) {
   return (
     <div className={`person-row ${highlight ? 'highlight' : ''} ${dashed ? 'dashed' : ''}`}>
-      <Avatar name={person.username} />
+      <Avatar name={person.username} pic={person.avatar} />
       <span className="grow person-text">
         <ProfileLink id={person.id}>
           <NameTag name={person.username} nameColor={person.nameColor} title={person.title} />
@@ -195,11 +197,12 @@ function FriendRow({ friend: f, onRemove }: { friend: Friend; onRemove: () => vo
   const status = f.online ? onlineText(f) : f.lastSeen ? `Last online ${timeAgo(f.lastSeen)}` : 'Offline'
   return (
     <div className="person-row">
-      <Avatar name={f.username} online={f.online} />
+      <Avatar name={f.username} online={f.online} pic={f.avatar} />
       <span className="grow person-text">
         <ProfileLink id={f.id}>
           <NameTag name={f.username} nameColor={f.nameColor} title={f.title} />
         </ProfileLink>
+        {f.onBanter && <span className="banter-pill" title="Uses Banter, the chat app for your Wordle and Lingora friends">On Banter</span>}
         <span className={`small ${f.online ? 'c-success' : 'muted'}`}>
           {status}
           {!f.onLingora && <span className="muted"> · not on Lingora yet</span>}
@@ -336,7 +339,7 @@ function Leaderboard({ rows }: { rows: Row[] }) {
       {rows.map((r, i) => (
         <li key={r.key} className={r.me ? 'me' : ''}>
           <span className="rank">{i + 1}</span>
-          <Avatar name={r.name} />
+          <Avatar name={r.name} pic={r.avatar} />
           <span className="grow">
             <ProfileLink id={r.profileId}>
               <NameTag name={r.me ? `${r.name} (you)` : r.name} nameColor={r.nameColor} title={r.title} />

@@ -23,6 +23,12 @@ services:
       # Optional: GIF search in chats (use the same key as Wordle Unlimited).
       - key: GIPHY_API_KEY
         sync: false
+      # Optional: where Banter and Wordle Unlimited live, for "Open in Banter" links and invite
+      # cards. Defaults to the current onrender.com addresses.
+      - key: BANTER_URL
+        sync: false
+      - key: WORDLE_URL
+        sync: false
       # Optional: push notifications. The same three values as Banter and Wordle Unlimited.
       - key: VAPID_PUBLIC_KEY
         sync: false

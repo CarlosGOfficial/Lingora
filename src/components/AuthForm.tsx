@@ -5,7 +5,7 @@ export type AuthMode = 'signup' | 'login'
 
 /**
  * Username + password, for a new account or an existing one (shared with Wordle
- * Unlimited), or Wordle's 4-digit PIN.
+ * Unlimited and Banter), or Wordle's 4-digit PIN.
  */
 export function AuthForm({ mode, onModeChange, onDone }: { mode: AuthMode; onModeChange: (m: AuthMode) => void; onDone?: () => void }) {
   const [username, setUsername] = useState('')
@@ -111,7 +111,7 @@ export function AuthForm({ mode, onModeChange, onDone }: { mode: AuthMode; onMod
         </button>
       </p>
       <p className="small muted center-text auth-note">
-        One account for Lingora and <strong>Wordle Unlimited</strong> — already play Wordle? Log in with the same username
+        One account for Lingora, <strong>Banter</strong> and <strong>Wordle Unlimited</strong> — already have one? Log in with the same username
         {signup ? '.' : ', or with your Wordle PIN.'}
       </p>
     </form>

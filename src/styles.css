@@ -1566,3 +1566,58 @@ input[type='range'] { accent-color: var(--accent); }
 .modal-actions { justify-content: flex-end; margin-top: 4px; }
 .btn-danger-solid { background: var(--danger); background-image: none; color: #fff; border-color: transparent; box-shadow: 0 6px 16px -8px var(--danger); }
 .btn-danger-solid:disabled { opacity: .45; box-shadow: none; }
+/* ---------- Chat formatting (same as Banter's) ---------- */
+.bubble .inline-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .86em; padding: 1px 5px; border-radius: 6px; background: color-mix(in srgb, currentColor 14%, transparent); }
+.bubble .code-block { margin: 4px 0; padding: 8px 10px; border-radius: 10px; white-space: pre-wrap; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85em; background: color-mix(in srgb, currentColor 12%, transparent); }
+.bubble .quote-line { display: block; margin: 2px 0; padding-left: 8px; border-left: 3px solid color-mix(in srgb, currentColor 35%, transparent); opacity: .92; }
+.bubble .spoiler { border-radius: 4px; cursor: pointer; transition: background .2s, color .2s; }
+.bubble .spoiler:not(.shown) { color: transparent; background: color-mix(in srgb, var(--text) 55%, var(--surface)); }
+.bubble .spoiler:not(.shown) * { color: transparent; background: transparent; }
+.bubble .spoiler.shown { background: color-mix(in srgb, currentColor 14%, transparent); }
+.bubble .mention { font-weight: 700; padding: 0 3px; border-radius: 5px; cursor: pointer; background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.bubble.me .mention { background: rgb(255 255 255 / 22%); }
+.bubble .mention.me { background: color-mix(in srgb, #f59e0b 30%, transparent); }
+.bubble.mentioned { box-shadow: 0 0 0 2px #f59e0b; }
+.bubble.jumbo { background: transparent !important; border: none !important; font-size: 2.6rem; line-height: 1.15; padding: 0 2px; }
+.bubble a { color: inherit; text-decoration: underline; text-underline-offset: 2px; word-break: break-all; }
+
+/* ---------- Cards for the other apps ---------- */
+.app-card-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; margin-top: 6px; text-decoration: none; }
+.banter-card { width: 270px; max-width: 100%; overflow: hidden; border-radius: 16px; border: 1px solid var(--glass-border); background: var(--surface); box-shadow: 0 4px 18px rgb(0 0 0 / 8%); }
+.banter-card-banner { display: block; width: 100%; height: 56px; object-fit: cover; }
+.banter-card-body { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; }
+.banter-card-label { font-size: .66rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.banter-card-head { display: flex; align-items: center; gap: 10px; }
+.banter-card-icon { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 13px; object-fit: cover; color: #fff; font-weight: 800; font-size: 1.1rem; }
+.banter-card-name { display: flex; flex-direction: column; min-width: 0; }
+.banter-card-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Wordle profile pictures */
+.avatar.has-pic { background: var(--surface); overflow: visible; }
+.avatar.has-pic > img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+
+/* "On Banter" */
+.banter-pill { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: .62rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #0d9488; background: rgb(13 148 136 / 12%); vertical-align: middle; }
+
+/* A friend's Banter profile look, on their Lingora profile */
+.banter-banner { position: relative; height: 120px; margin-bottom: -48px; border-radius: 22px; background-size: cover; background-position: center; box-shadow: 0 6px 24px rgb(0 0 0 / 10%); }
+.banter-banner-tag { position: absolute; right: 12px; top: 10px; padding: 2px 9px; border-radius: 999px; font-size: .66rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: #fff; background: rgb(0 0 0 / 35%); backdrop-filter: blur(6px); }
+.profile-card.with-banner { position: relative; margin: 0 12px; padding: 14px 16px; border-radius: 20px; background-color: var(--surface); border: 1px solid var(--glass-border); border-top: 3px solid var(--profile-accent, var(--accent)); backdrop-filter: blur(10px); }
+.profile-card.with-banner[style*="gradient"] .person-text { padding: 6px 10px; border-radius: 14px; background: color-mix(in srgb, var(--surface) 82%, transparent); }
+.banter-status { color: var(--text); }
+.open-banter { white-space: nowrap; }
+@media (max-width: 560px) { .hide-narrow { display: none; } }
+
+/* Sidebar: the other apps on the same account */
+.other-apps { margin-top: auto; display: flex; flex-direction: column; gap: 4px; padding-top: 16px; }
+.other-apps-label { padding: 0 12px 2px; font-size: .64rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.other-app { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 14px; color: var(--text); text-decoration: none; transition: background .15s; }
+.other-app:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.other-app > span:nth-child(2) { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.2; font-size: .86rem; }
+.other-app svg { color: var(--muted); }
+.other-app-mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; color: #fff; font-weight: 800; font-size: .9rem; flex-shrink: 0; }
+.other-app-mark.banter { background: linear-gradient(135deg, #0d9488, #ff6b4a); }
+.other-app-mark.wordle { background: linear-gradient(135deg, #6aaa64, #c9b458); }
+@media (min-width: 861px) { .sidebar { display: flex; flex-direction: column; } }
+.person-text .banter-pill { align-self: flex-start; margin-left: 0; margin-top: 1px; }
+@media (max-width: 560px) { .profile-card.with-banner { flex-wrap: wrap; } .profile-card.with-banner .person-text { flex: 1 1 0; min-width: 0; } .profile-card.with-banner > a.btn { width: 100%; justify-content: center; } }

@@ -7,6 +7,7 @@ import { ProfileLink } from '../components/ProfileLink'
 import { onlineText, timeAgo } from '../lib/time'
 import { GROUP_NAME_MAX, MAX_GROUP_MEMBERS, type GroupSummary } from '../social/chat'
 import { useChat } from '../social/useChat'
+import { useAppLinks } from '../social/apps'
 import { refreshFriends, useFriends } from '../social/useFriends'
 import { useStore } from '../store/useStore'
 import { api } from '../sync/api'
@@ -41,6 +42,7 @@ export function FriendChatPage() {
                 {friend.online ? onlineText(friend) : friend.lastSeen ? `Last online ${timeAgo(friend.lastSeen)}` : 'Offline'}
               </span>
             </span>
+            <OpenInBanter path={`/chats/dm/${friend.id}`} />
           </>
         )}
       </header>
@@ -125,6 +127,7 @@ export function GroupChatPage() {
                   {group.members.map((m) => m.username).join(', ')}
                 </span>
               </span>
+              <OpenInBanter path={`/chats/group/${group.id}`} />
               <button className={`btn small ${showMembers ? 'btn-primary' : ''}`} onClick={() => setShowMembers(!showMembers)} aria-pressed={showMembers}>
                 <Icon name="users" size={16} /> {group.members.length}
               </button>
@@ -318,5 +321,16 @@ export function NewGroupPage() {
         Create group
       </button>
     </form>
+  )
+}
+
+/** The same chat in Banter (voice calls, screen sharing and servers live there). */
+function OpenInBanter({ path }: { path: string }) {
+  const links = useAppLinks()
+  if (!links?.banterUrl) return null
+  return (
+    <a className="btn btn-ghost small open-banter" href={`${links.banterUrl}${path}`} target="_blank" rel="noopener noreferrer" title="Open this chat in Banter, for voice calls and more">
+      <Icon name="chat" size={16} /> <span className="hide-narrow">Open in Banter</span> <Icon name="external" size={13} />
+    </a>
   )
 }

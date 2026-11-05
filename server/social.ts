@@ -33,6 +33,7 @@ import { levelFromXp } from '../src/shop/catalog'
 import { BIO_MAX, type CourseProgress, type Notifications, type ProfileRelation, type PublicProfile } from '../src/social/profile'
 import { currentUserId, db, fail, rateLimit, requireUser, str, type Env } from './http'
 import { clip, notify } from './push'
+import { avatarUrl, banterLooks } from './banter'
 
 /**
  * Friends, private chats and group chats. Everything lives in Wordle Unlimited's tables,
@@ -73,12 +74,12 @@ function cosmetics(prefs: Prefs | null) {
 /** id → user row (with Lingora prefs and presence) for the given ids. */
 async function people(s: Sql, ids: string[]): Promise<Map<string, Row>> {
   if (!ids.length) return new Map()
-  const rows = await s`select u.id, u.username, u.first_name, u.last_seen_at, p.prefs, p.user_id is not null as on_lingora
+  const rows = await s`select u.id, u.username, u.first_name, u.last_seen_at, u.profile_image_url, p.prefs, p.user_id is not null as on_lingora
     from users u left join lingora_profiles p on p.user_id = u.id where u.id = any(${[...new Set(ids)]}::text[])`
   return new Map(rows.map((u) => [u.id as string, u]))
 }
 
-const personCard = (u: Row): ChatPerson => ({ id: u.id, username: displayName(u), ...cosmetics(u.prefs as Prefs | null) })
+const personCard = (u: Row): ChatPerson => ({ id: u.id, username: displayName(u), avatar: avatarUrl(u.profile_image_url), ...cosmetics(u.prefs as Prefs | null) })
 
 async function friendshipBetween(s: Sql, a: string, b: string) {
   const [row] = await s`select id, requester_id, addressee_id, status from friendships
@@ -89,7 +90,7 @@ const areFriends = async (s: Sql, a: string, b: string) => (await friendshipBetw
 
 /** Weekly XP, streak and course for everyone in `ids` who has opened Lingora. */
 async function leaderboard(s: Sql, uid: string, ids: string[], today: string): Promise<LeaderboardRow[]> {
-  const rows = await s`select u.id, u.username, u.first_name, p.prefs from users u join lingora_profiles p on p.user_id = u.id where u.id = any(${ids}::text[])`
+  const rows = await s`select u.id, u.username, u.first_name, u.profile_image_url, p.prefs from users u join lingora_profiles p on p.user_id = u.id where u.id = any(${ids}::text[])`
   const days = await s`select user_id, to_char(day, 'YYYY-MM-DD') as day, sum(xp)::int as xp from lingora_xp_events
     where user_id = any(${ids}::text[]) group by user_id, day order by day`
   const start = weekStart(today)
@@ -102,6 +103,7 @@ async function leaderboard(s: Sql, uid: string, ids: string[], today: string): P
       return {
         id: p.id,
         username: displayName(p),
+        avatar: avatarUrl(p.profile_image_url),
         weeklyXp: active.filter((d) => daysBetween(start, d.day) >= 0 && daysBetween(d.day, today) >= 0).reduce((n, d) => n + d.xp, 0),
         streak: reconcile(streak, today).current,
         lang: lang && LANGS.includes(lang) ? lang : 'zh',
@@ -334,7 +336,7 @@ export function registerSocialRoutes(app: Hono<Env, any, any>) {
           where to_user_id = ${uid} and read_at is null and deleted_at is null and from_user_id = any(${accepted}::text[]) group by from_user_id`
       : []
     const unread = new Map(unreadRows.map((r) => [r.from_user_id as string, r.n as number]))
-    const open = await openApps(s, accepted)
+    const [open, banter] = await Promise.all([openApps(s, accepted), banterLooks(s, accepted)])
 
     const friends: Friend[] = accepted
       .flatMap((id) => {
@@ -342,7 +344,7 @@ export function registerSocialRoutes(app: Hono<Env, any, any>) {
         if (!u) return []
         const seen = u.last_seen_at ? new Date(u.last_seen_at).toISOString() : null
         const online = isOnline(u.last_seen_at)
-        return [{ ...personCard(u), online, openIn: online ? open.get(id) ?? [] : [], lastSeen: seen, unread: unread.get(id) ?? 0, onLingora: !!u.on_lingora }]
+        return [{ ...personCard(u), online, openIn: online ? open.get(id) ?? [] : [], lastSeen: seen, unread: unread.get(id) ?? 0, onLingora: !!u.on_lingora, onBanter: banter.has(id) }]
       })
       // Online first; unread messages float up within each group.
       .sort((a, b) => Number(b.online) - Number(a.online) || b.unread - a.unread || a.username.localeCompare(b.username))
@@ -648,6 +650,7 @@ export function registerSocialRoutes(app: Hono<Env, any, any>) {
       joinedAt: u.created_at ? new Date(u.created_at).toISOString() : null,
       online: isOnline(u.last_seen_at),
       openIn: isOnline(u.last_seen_at) ? (await openApps(s, [u.id])).get(u.id) ?? [] : [],
+      banter: (await banterLooks(s, [u.id])).get(u.id) ?? null,
       lastSeen: u.last_seen_at ? new Date(u.last_seen_at).toISOString() : null,
       friends,
       relation,

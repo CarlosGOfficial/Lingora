@@ -93,7 +93,7 @@ function Landing() {
               I have an account
             </Link>
           </div>
-          <p className="small muted">Already play Wordle Unlimited? Use the same account.</p>
+          <p className="small muted">Already on Wordle Unlimited or Banter? Use the same account.</p>
         </div>
         <HeroDemo />
       </section>
@@ -171,7 +171,10 @@ function Landing() {
               <Icon name="users" size={18} /> Weekly XP leaderboard with your friends
             </li>
             <li>
-              <Icon name="chat" size={18} /> Chats and group chats — shared with Wordle Unlimited
+              <Icon name="chat" size={18} /> Chats and group chats — the same ones as in Banter and Wordle Unlimited
+            </li>
+            <li>
+              <Icon name="mic" size={18} /> Voice calls and study servers with your friends on Banter, the chat app that goes with Lingora
             </li>
             <li>
               <Icon name="bag" size={18} /> Earn coins for themes, titles and name colours
@@ -209,7 +212,7 @@ function Landing() {
       <footer className="site-footer small muted">
         <Brand />
         <span>
-          Courses follow HSK 3.0, JLPT and CEFR. Accounts are shared with Wordle Unlimited. © {new Date().getFullYear()} {APP_NAME}
+          Courses follow HSK 3.0, JLPT and CEFR. One account for Lingora, Banter and Wordle Unlimited. © {new Date().getFullYear()} {APP_NAME}
         </span>
       </footer>
     </div>

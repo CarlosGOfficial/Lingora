@@ -88,7 +88,7 @@ export function ResetDialog({ mode, onClose }: { mode: ResetMode; onClose: () =>
                   <li>Your other courses</li>
                 </>
               ) : (
-                <li>{signedIn ? 'Your account, friends and chats (shared with Wordle Unlimited)' : 'Your settings'}</li>
+                <li>{signedIn ? 'Your account, friends and chats (shared with Banter and Wordle Unlimited)' : 'Your settings'}</li>
               )}
             </ul>
           </div>
