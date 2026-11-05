@@ -56,6 +56,15 @@ export const PUSH_SCHEMA = [
     created_at timestamp not null default now()
   )`,
   `create index if not exists "IDX_push_user" on push.subscriptions(user_id)`,
+  // Which app each person has open (Banter, Wordle, Lingora), shared by all three. The
+  // users.last_seen_at "online" dot is any app; this says which.
+  `create schema if not exists presence`,
+  `create table if not exists presence.apps (
+    user_id text not null references users(id) on delete cascade,
+    app text not null,
+    seen_at timestamp not null default now(),
+    primary key (user_id, app)
+  )`,
 ];
 
 type Sub = { endpoint: string; user_id: string; app: PushApp; p256dh: string; auth: string; user_agent: string };

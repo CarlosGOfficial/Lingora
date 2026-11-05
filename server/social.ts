@@ -297,7 +297,11 @@ const chatKind = (v: string): ChatKind => (v === 'dm' || v === 'group' ? v : fai
 export function registerSocialRoutes(app: Hono<Env, any, any>) {
   // Heartbeat from any open page, so friends (here and in Wordle) see you're online.
   app.post('/presence', requireUser, async (c) => {
-    await db()`update users set last_seen_at = now() where id = ${c.get('userId')}`
+    const uid = c.get('userId')
+    await db()`update users set last_seen_at = now() where id = ${uid}`
+    // Which app: Banter shows "Online in Lingora" (shared table, see push.ts).
+    await db()`insert into presence.apps (user_id, app, seen_at) values (${uid}, 'lingora', now())
+      on conflict (user_id, app) do update set seen_at = now()`.catch(() => {})
     return c.json({ ok: true })
   })
 
