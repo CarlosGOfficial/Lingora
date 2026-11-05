@@ -4,7 +4,7 @@ import { Avatar, ChatPanel } from '../components/chat/ChatPanel'
 import { Icon } from '../components/Icon'
 import { NameTag } from '../components/NameTag'
 import { ProfileLink } from '../components/ProfileLink'
-import { timeAgo } from '../lib/time'
+import { onlineText, timeAgo } from '../lib/time'
 import { GROUP_NAME_MAX, MAX_GROUP_MEMBERS, type GroupSummary } from '../social/chat'
 import { useChat } from '../social/useChat'
 import { refreshFriends, useFriends } from '../social/useFriends'
@@ -38,7 +38,7 @@ export function FriendChatPage() {
                 <NameTag name={friend.username} nameColor={friend.nameColor} title={friend.title} />
               </ProfileLink>
               <span className={`small ${friend.online ? 'c-success' : 'muted'}`}>
-                {friend.online ? 'Online' : friend.lastSeen ? `Last online ${timeAgo(friend.lastSeen)}` : 'Offline'}
+                {friend.online ? onlineText(friend) : friend.lastSeen ? `Last online ${timeAgo(friend.lastSeen)}` : 'Offline'}
               </span>
             </span>
           </>

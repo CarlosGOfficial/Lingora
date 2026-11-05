@@ -4,7 +4,7 @@ import { Icon } from '../components/Icon'
 import { NameTag } from '../components/NameTag'
 import { COURSES } from '../content'
 import { dayKey } from '../lib/date'
-import { timeAgo } from '../lib/time'
+import { onlineText, timeAgo } from '../lib/time'
 import { BIO_MAX, type PublicProfile } from '../social/profile'
 import { refreshFriends } from '../social/useFriends'
 import { api } from '../sync/api'
@@ -51,7 +51,7 @@ export function UserProfilePage() {
             <NameTag name={p.username} nameColor={p.nameColor} title={p.title} />
             {p.isAdmin && <span className="admin-badge">ADMIN</span>}
           </span>
-          <span className={`small ${p.online ? 'c-success' : 'muted'}`}>{p.online ? 'Online now' : p.lastSeen ? `Last online ${timeAgo(p.lastSeen)}` : 'Offline'}</span>
+          <span className={`small ${p.online ? 'c-success' : 'muted'}`}>{p.online ? onlineText(p, 'Online now') : p.lastSeen ? `Last online ${timeAgo(p.lastSeen)}` : 'Offline'}</span>
           <span className="small muted">
             {joined && `Joined ${joined} · `}
             {p.friends} {p.friends === 1 ? 'friend' : 'friends'}

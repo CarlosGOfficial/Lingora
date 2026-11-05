@@ -14,3 +14,14 @@ export function messageTime(iso: string): string {
   const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
   return d.toDateString() === new Date().toDateString() ? time : `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${time}`
 }
+
+const APP_NAMES = { lingora: 'Lingora', banter: 'Banter', wordle: 'Wordle Unlimited' } as const
+
+/** "Online in Banter", "Online in Lingora and Wordle Unlimited", or `plain` ("Online"). */
+export function onlineText(p: { openIn?: (keyof typeof APP_NAMES)[] }, plain = 'Online'): string {
+  if (!p.openIn?.length) return plain
+  const names = p.openIn.map((a) => APP_NAMES[a])
+  let list = names.join(', ')
+  try { list = new (Intl as unknown as { ListFormat: new (l: string, o: object) => { format: (x: string[]) => string } }).ListFormat('en', { type: 'conjunction' }).format(names) } catch { /* old browser */ }
+  return `Online in ${list}`
+}

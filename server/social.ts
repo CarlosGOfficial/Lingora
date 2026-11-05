@@ -50,6 +50,19 @@ type Row = Record<string, any>
 const displayName = (u: Row) => (u.username as string) || (u.first_name as string) || 'Player'
 const isOnline = (seen: unknown) => !!seen && Date.now() - new Date(seen as string).getTime() < ONLINE_MS
 
+type AppName = 'lingora' | 'banter' | 'wordle'
+/** Which app each person has open right now (presence.apps: all three apps write a heartbeat). */
+async function openApps(s: NonNullable<ReturnType<typeof db>>, ids: string[]): Promise<Map<string, AppName[]>> {
+  const out = new Map<string, AppName[]>()
+  if (!ids.length) return out
+  try {
+    const rows = await s`select user_id, app from presence.apps where user_id = any(${ids}::text[])
+      and seen_at > now() - (${String(ONLINE_MS)} || ' milliseconds')::interval`
+    for (const r of rows) out.set(r.user_id as string, [...(out.get(r.user_id as string) ?? []), r.app as AppName])
+  } catch { /* table not there yet: plain "Online" */ }
+  return out
+}
+
 function cosmetics(prefs: Prefs | null) {
   const eq = ((prefs?.appearance as { equipped?: Record<string, string> } | undefined)?.equipped ?? {}) as Record<string, string>
   const title = SHOP_ITEM_BY_ID.get(eq.title)
@@ -321,13 +334,15 @@ export function registerSocialRoutes(app: Hono<Env, any, any>) {
           where to_user_id = ${uid} and read_at is null and deleted_at is null and from_user_id = any(${accepted}::text[]) group by from_user_id`
       : []
     const unread = new Map(unreadRows.map((r) => [r.from_user_id as string, r.n as number]))
+    const open = await openApps(s, accepted)
 
     const friends: Friend[] = accepted
       .flatMap((id) => {
         const u = who.get(id)
         if (!u) return []
         const seen = u.last_seen_at ? new Date(u.last_seen_at).toISOString() : null
-        return [{ ...personCard(u), online: isOnline(u.last_seen_at), lastSeen: seen, unread: unread.get(id) ?? 0, onLingora: !!u.on_lingora }]
+        const online = isOnline(u.last_seen_at)
+        return [{ ...personCard(u), online, openIn: online ? open.get(id) ?? [] : [], lastSeen: seen, unread: unread.get(id) ?? 0, onLingora: !!u.on_lingora }]
       })
       // Online first; unread messages float up within each group.
       .sort((a, b) => Number(b.online) - Number(a.online) || b.unread - a.unread || a.username.localeCompare(b.username))
@@ -632,6 +647,7 @@ export function registerSocialRoutes(app: Hono<Env, any, any>) {
       bio: u.bio ?? null,
       joinedAt: u.created_at ? new Date(u.created_at).toISOString() : null,
       online: isOnline(u.last_seen_at),
+      openIn: isOnline(u.last_seen_at) ? (await openApps(s, [u.id])).get(u.id) ?? [] : [],
       lastSeen: u.last_seen_at ? new Date(u.last_seen_at).toISOString() : null,
       friends,
       relation,

@@ -21,6 +21,8 @@ export interface PublicProfile extends ChatPerson {
   bio: string | null
   joinedAt: string | null
   online: boolean
+  /** Which apps they have open right now. */
+  openIn?: ('lingora' | 'banter' | 'wordle')[]
   lastSeen: string | null
   friends: number
   relation: ProfileRelation

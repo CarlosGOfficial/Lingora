@@ -7,7 +7,7 @@ import { ProfileLink } from '../components/ProfileLink'
 import { COURSES } from '../content'
 import type { LangCode } from '../content/types'
 import { dayKey } from '../lib/date'
-import { timeAgo } from '../lib/time'
+import { onlineText, timeAgo } from '../lib/time'
 import { cosmeticsOf } from '../shop/catalog'
 import { messagePreview } from '../social/chat'
 import { simulatedStats } from '../social/friends'
@@ -192,7 +192,7 @@ function PersonRow({ person, sub, children, highlight, dashed }: { person: Frien
 
 function FriendRow({ friend: f, onRemove }: { friend: Friend; onRemove: () => void }) {
   const [confirming, setConfirming] = useState(false)
-  const status = f.online ? 'Online' : f.lastSeen ? `Last online ${timeAgo(f.lastSeen)}` : 'Offline'
+  const status = f.online ? onlineText(f) : f.lastSeen ? `Last online ${timeAgo(f.lastSeen)}` : 'Offline'
   return (
     <div className="person-row">
       <Avatar name={f.username} online={f.online} />

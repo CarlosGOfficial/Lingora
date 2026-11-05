@@ -96,6 +96,8 @@ export type FriendCard = ChatPerson
 
 export interface Friend extends FriendCard {
   online: boolean
+  /** Which apps they have open right now. */
+  openIn?: ('lingora' | 'banter' | 'wordle')[]
   lastSeen: string | null
   unread: number
   /** Has opened Lingora (only they appear on the leaderboard). */
