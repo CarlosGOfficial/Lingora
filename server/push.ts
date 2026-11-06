@@ -71,6 +71,16 @@ export const PUSH_SCHEMA = [
 
 type Sub = { endpoint: string; user_id: string; app: PushApp; p256dh: string; auth: string; user_agent: string };
 
+// Who actually gets it: not on Do not disturb, not muted for this conversation (the tag
+// names it: "dm:<sender>", "group:<id>", "channel:<id>"), and not in their quiet hours.
+// Banter keeps these settings (chat.notify_prefs, chat.notify_settings).
+const TARGETS = `select * from push.subscriptions s where s.user_id = any($1::text[])
+  and s.user_id not in (select user_id from chat.profiles where style->>'presence' = 'dnd')
+  and s.user_id not in (select user_id from chat.notify_prefs where scope = $2 and (level = 'none' or muted_until > now()))
+  and s.user_id not in (select user_id from chat.notify_settings where quiet_on and (case
+    when quiet_start <= quiet_end then (now() at time zone tz)::time >= quiet_start and (now() at time zone tz)::time < quiet_end
+    else (now() at time zone tz)::time >= quiet_start or (now() at time zone tz)::time < quiet_end end))`;
+
 /** Sends `event` to these people (never throws; it's fire-and-forget). */
 export function notify(userIds: Iterable<string>, event: PushEvent) {
   const ids = Array.from(new Set(userIds));
@@ -78,9 +88,7 @@ export function notify(userIds: Iterable<string>, event: PushEvent) {
   void (async () => {
     const db = sql
     if (!db) return
-    // People on Do not disturb (set in Banter) get nothing.
-    const rows = (await db.query(`select * from push.subscriptions where user_id = any($1::text[])
-        and user_id not in (select user_id from chat.profiles where style->>'presence' = 'dnd')`, [ids])
+    const rows = (await db.query(TARGETS, [ids, event.tag ?? ""])
       .catch(() => db.query(`select * from push.subscriptions where user_id = any($1::text[])`, [ids]))) as Sub[]
     const order = ORDER[event.kind];
     // Per person and browser, the first app in the order that has a subscription.
