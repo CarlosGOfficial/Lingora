@@ -65,6 +65,8 @@ export const PUSH_SCHEMA = [
     seen_at timestamp not null default now(),
     primary key (user_id, app)
   )`,
+  // What they're doing there (Lingora: language and lesson/review/...), for rich presence.
+  `alter table presence.apps add column if not exists detail jsonb`,
 ];
 
 type Sub = { endpoint: string; user_id: string; app: PushApp; p256dh: string; auth: string; user_agent: string };
@@ -76,7 +78,10 @@ export function notify(userIds: Iterable<string>, event: PushEvent) {
   void (async () => {
     const db = sql
     if (!db) return
-    const rows = (await db.query(`select * from push.subscriptions where user_id = any($1::text[])`, [ids])) as Sub[]
+    // People on Do not disturb (set in Banter) get nothing.
+    const rows = (await db.query(`select * from push.subscriptions where user_id = any($1::text[])
+        and user_id not in (select user_id from chat.profiles where style->>'presence' = 'dnd')`, [ids])
+      .catch(() => db.query(`select * from push.subscriptions where user_id = any($1::text[])`, [ids]))) as Sub[]
     const order = ORDER[event.kind];
     // Per person and browser, the first app in the order that has a subscription.
     const groups = new Map<string, Sub[]>();

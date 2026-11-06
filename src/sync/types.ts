@@ -105,6 +105,8 @@ export interface Friend extends FriendCard {
   onLingora: boolean
   /** Has opened Banter, the chat app. */
   onBanter?: boolean
+  /** In a Wordle Unlimited game right now. */
+  wordleGame?: { code: string; status: string } | null
 }
 
 export interface FriendRequest extends FriendCard {

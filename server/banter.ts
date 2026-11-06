@@ -77,6 +77,29 @@ export async function banterLooks(s: Sql, ids: string[]): Promise<Map<string, Ba
   return out
 }
 
+/** People who chose Invisible in Banter: offline here too. */
+export async function invisibleIds(s: Sql, ids: string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set()
+  try {
+    const rows = await s`select user_id from chat.profiles where user_id = any(${[...new Set(ids)]}::text[]) and style->>'presence' = 'invisible'`
+    return new Set(rows.map((r) => r.user_id as string))
+  } catch {
+    return new Set()
+  }
+}
+
+/** Friends in a Wordle Unlimited game right now (its players/rooms tables): room code and lobby/playing. */
+export async function wordleGames(s: Sql, ids: string[]): Promise<Map<string, { code: string; status: string }>> {
+  const out = new Map<string, { code: string; status: string }>()
+  if (!ids.length) return out
+  try {
+    const rows = await s`select p.user_id, r.code, r.status from players p join rooms r on r.id = p.room_id
+      where p.user_id = any(${[...new Set(ids)]}::text[]) and p.last_seen > now() - interval '45 seconds' order by p.last_seen desc`
+    for (const r of rows) if (!out.has(r.user_id as string)) out.set(r.user_id as string, { code: r.code as string, status: r.status as string })
+  } catch { /* no Wordle tables */ }
+  return out
+}
+
 export function registerBanterRoutes(app: Hono<Env, any, any>) {
   // Where the other two apps live (for links like "Open in Banter").
   app.get('/config', (c) => c.json({ banterUrl: BANTER_URL, wordleUrl: WORDLE_URL }))

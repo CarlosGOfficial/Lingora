@@ -42,7 +42,7 @@ export const api = {
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   sync: (body: SyncRequest) => request<Snapshot>('/sync', { body }),
   resetProgress: (lang?: LangCode) => request<{ ok: boolean }>('/progress/reset', { body: lang ? { lang } : {}, method: 'POST' }),
-  presence: () => request<{ ok: boolean }>('/presence', { method: 'POST' }),
+  presence: (detail?: { lang: string; doing: string }) => request<{ ok: boolean }>('/presence', { method: 'POST', body: detail ?? {} }),
   friends: (today: string) => request<FriendsData>(`/friends?today=${today}`),
   requestFriend: (username: string) => request<{ status: 'pending' | 'accepted'; name: string }>('/friends/request', { body: { username } }),
   respondRequest: (requestId: number, action: 'accept' | 'decline' | 'cancel') =>

@@ -12,6 +12,7 @@ import { cosmeticsOf } from '../shop/catalog'
 import { messagePreview } from '../social/chat'
 import { simulatedStats } from '../social/friends'
 import { GroupAvatar } from './FriendChatPage'
+import { useAppLinks } from '../social/apps'
 import { refreshFriends, useFriends } from '../social/useFriends'
 import { liveStreak, useStore, weeklyXp } from '../store/useStore'
 import { api } from '../sync/api'
@@ -194,7 +195,7 @@ function PersonRow({ person, sub, children, highlight, dashed }: { person: Frien
 
 function FriendRow({ friend: f, onRemove }: { friend: Friend; onRemove: () => void }) {
   const [confirming, setConfirming] = useState(false)
-  const status = f.online ? onlineText(f) : f.lastSeen ? `Last online ${timeAgo(f.lastSeen)}` : 'Offline'
+  const status = f.online ? (f.wordleGame ? `${f.wordleGame.status === 'waiting' ? 'In a Wordle Unlimited lobby' : 'Playing Wordle Unlimited'} · room ${f.wordleGame.code}` : onlineText(f)) : f.lastSeen ? `Last online ${timeAgo(f.lastSeen)}` : 'Offline'
   return (
     <div className="person-row">
       <Avatar name={f.username} online={f.online} pic={f.avatar} />
@@ -208,6 +209,7 @@ function FriendRow({ friend: f, onRemove }: { friend: Friend; onRemove: () => vo
           {!f.onLingora && <span className="muted"> · not on Lingora yet</span>}
         </span>
       </span>
+      {f.wordleGame && <JoinWordle code={f.wordleGame.code} />}
       <Link to={`/friends/chat/${f.id}`} className="icon-btn small with-badge" aria-label={`Message ${f.username}`}>
         <Icon name="chat" size={18} />
         {f.unread > 0 && <span className="badge">{f.unread}</span>}
@@ -362,5 +364,16 @@ function Leaderboard({ rows }: { rows: Row[] }) {
         </li>
       ))}
     </ol>
+  )
+}
+
+/** Join a friend's Wordle Unlimited game (opens Wordle in a new tab). */
+function JoinWordle({ code }: { code: string }) {
+  const links = useAppLinks()
+  if (!links?.wordleUrl) return null
+  return (
+    <a className="btn small join-wordle" href={`${links.wordleUrl}/room/${code}`} target="_blank" rel="noopener noreferrer" title="Join their Wordle Unlimited game">
+      Join
+    </a>
   )
 }

@@ -33,7 +33,7 @@ import { levelFromXp } from '../src/shop/catalog'
 import { BIO_MAX, type CourseProgress, type Notifications, type ProfileRelation, type PublicProfile } from '../src/social/profile'
 import { currentUserId, db, fail, rateLimit, requireUser, str, type Env } from './http'
 import { clip, notify } from './push'
-import { avatarUrl, banterLooks } from './banter'
+import { avatarUrl, banterLooks, invisibleIds, wordleGames } from './banter'
 
 /**
  * Friends, private chats and group chats. Everything lives in Wordle Unlimited's tables,
@@ -315,8 +315,14 @@ export function registerSocialRoutes(app: Hono<Env, any, any>) {
     const uid = c.get('userId')
     await db()`update users set last_seen_at = now() where id = ${uid}`
     // Which app: Banter shows "Online in Lingora" (shared table, see push.ts).
-    await db()`insert into presence.apps (user_id, app, seen_at) values (${uid}, 'lingora', now())
-      on conflict (user_id, app) do update set seen_at = now()`.catch(() => {})
+    // { lang, doing }: shown to friends in Banter and Wordle ("Studying Japanese on Lingora").
+    const body = (await c.req.json().catch(() => ({}))) as { lang?: unknown; doing?: unknown }
+    const detail = JSON.stringify({
+      lang: ['zh', 'ja', 'pt'].includes(String(body.lang)) ? body.lang : null,
+      doing: ['lesson', 'review', 'practice', 'reading', 'conversation', 'test', 'browsing'].includes(String(body.doing)) ? body.doing : 'browsing',
+    })
+    await db()`insert into presence.apps (user_id, app, seen_at, detail) values (${uid}, 'lingora', now(), ${detail}::jsonb)
+      on conflict (user_id, app) do update set seen_at = now(), detail = excluded.detail`.catch(() => {})
     return c.json({ ok: true })
   })
 
@@ -336,15 +342,16 @@ export function registerSocialRoutes(app: Hono<Env, any, any>) {
           where to_user_id = ${uid} and read_at is null and deleted_at is null and from_user_id = any(${accepted}::text[]) group by from_user_id`
       : []
     const unread = new Map(unreadRows.map((r) => [r.from_user_id as string, r.n as number]))
-    const [open, banter] = await Promise.all([openApps(s, accepted), banterLooks(s, accepted)])
+    const [open, banter, hidden, games] = await Promise.all([openApps(s, accepted), banterLooks(s, accepted), invisibleIds(s, accepted), wordleGames(s, accepted)])
 
     const friends: Friend[] = accepted
       .flatMap((id) => {
         const u = who.get(id)
         if (!u) return []
         const seen = u.last_seen_at ? new Date(u.last_seen_at).toISOString() : null
-        const online = isOnline(u.last_seen_at)
-        return [{ ...personCard(u), online, openIn: online ? open.get(id) ?? [] : [], lastSeen: seen, unread: unread.get(id) ?? 0, onLingora: !!u.on_lingora, onBanter: banter.has(id) }]
+        const online = !hidden.has(id) && isOnline(u.last_seen_at) // Invisible in Banter: offline here too
+        return [{ ...personCard(u), online, openIn: online ? open.get(id) ?? [] : [], lastSeen: hidden.has(id) ? null : seen,
+          wordleGame: online ? games.get(id) ?? null : null, unread: unread.get(id) ?? 0, onLingora: !!u.on_lingora, onBanter: banter.has(id) }]
       })
       // Online first; unread messages float up within each group.
       .sort((a, b) => Number(b.online) - Number(a.online) || b.unread - a.unread || a.username.localeCompare(b.username))
@@ -648,7 +655,7 @@ export function registerSocialRoutes(app: Hono<Env, any, any>) {
       isAdmin: !!u.is_admin,
       bio: u.bio ?? null,
       joinedAt: u.created_at ? new Date(u.created_at).toISOString() : null,
-      online: isOnline(u.last_seen_at),
+      online: isOnline(u.last_seen_at) && (me === u.id || !(await invisibleIds(s, [u.id])).has(u.id)),
       openIn: isOnline(u.last_seen_at) ? (await openApps(s, [u.id])).get(u.id) ?? [] : [],
       banter: (await banterLooks(s, [u.id])).get(u.id) ?? null,
       lastSeen: u.last_seen_at ? new Date(u.last_seen_at).toISOString() : null,

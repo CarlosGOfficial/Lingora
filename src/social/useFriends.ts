@@ -60,12 +60,21 @@ export function useFriendAlerts(): number {
   return (data?.incoming.length ?? 0) + (data?.friends.reduce((n, f) => n + f.unread, 0) ?? 0) + (groups?.reduce((n, g) => n + g.unread, 0) ?? 0)
 }
 
+/** What you're doing, for friends' rich presence in Banter and Wordle ("Studying Japanese · lesson"). */
+function activityNow() {
+  const path = location.pathname
+  const doing = /^\/lesson\//.test(path) ? 'lesson' : /^\/(review|unit-review)/.test(path) ? 'review'
+    : /^\/practice/.test(path) ? 'practice' : /^\/reading\//.test(path) ? 'reading'
+    : /^\/conversation/.test(path) ? 'conversation' : /^\/section-test\//.test(path) ? 'test' : 'browsing'
+  return { lang: useStore.getState().activeLang, doing }
+}
+
 /** Tells the server you're online (friends see a green dot, here and in Wordle Unlimited). */
 export function usePresence(): void {
   const signedIn = useStore((s) => !!s.account)
   useEffect(() => {
     if (!signedIn) return
-    const ping = () => document.visibilityState === 'visible' && api.presence().catch(() => {})
+    const ping = () => document.visibilityState === 'visible' && api.presence(activityNow()).catch(() => {})
     ping()
     const id = setInterval(ping, PRESENCE_MS)
     document.addEventListener('visibilitychange', ping)
