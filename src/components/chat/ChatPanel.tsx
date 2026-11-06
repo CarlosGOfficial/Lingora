@@ -11,6 +11,7 @@ import {
   voiceNote,
   sharedFile,
   sticker,
+  dailyResult,
   fileSize,
   inviteCode,
   isEmoji,
@@ -170,6 +171,11 @@ export function MessageBody({ content, mine, sender, me, onMediaLoad }: { conten
         <span><strong>{file.name}</strong><small>{fileSize(file.bytes)} · Download</small></span>
       </a>
     )
+  }
+  const daily = dailyResult(content)
+  if (daily) {
+    const rows = daily.rows.map((r) => r.split('').map((c) => (c === 'G' ? '🟩' : c === 'Y' ? '🟨' : '⬛')).join('')).join('\n')
+    return <WordleCard icon="📅" title={`Wordle Daily #${daily.number} · ${daily.score}/6`} text={rows} href={links?.wordleUrl ? `${links.wordleUrl}/daily` : undefined} action="Play today's" />
   }
   const st = sticker(content)
   if (st) return <img className="sticker" src={chatImageUrl(st.image)} alt={st.name} title={st.name} onLoad={onMediaLoad} data-testid="sticker" />

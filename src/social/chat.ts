@@ -24,7 +24,12 @@ export const GIPHY_ID_RE = /^[A-Za-z0-9]{4,64}$/
 // Typed text that starts with one of these gets a leading space, so only real cards render.
 // (VOICE:, POLL:, FILE: and STICKER: come from Banter: a voice message, a poll you vote on in
 // Banter, a file to download and a server sticker.)
-const CARD_RE = /^(INVITE|PARTY|CLIP|IMG|GIF|VOICE|POLL|FILE|STICKER):/
+const CARD_RE = /^(INVITE|PARTY|CLIP|IMG|GIF|VOICE|POLL|FILE|STICKER|DAILY):/
+/** A Wordle Daily Challenge result: DAILY:<n>:<score>:<rows of G/Y/X joined by "/">. */
+export function dailyResult(content: string): { number: number; score: string; rows: string[] } | null {
+  const m = /^DAILY:(\d{1,5}):([1-6X]):([GYX/]{5,41})$/.exec(content)
+  return m ? { number: Number(m[1]), score: m[2], rows: m[3].split('/').filter((r) => /^[GYX]{5}$/.test(r)) } : null
+}
 /** A file from Banter: FILE:<id>:<bytes>:<name>. */
 export function sharedFile(content: string): { id: string; bytes: number; name: string } | null {
   const m = /^FILE:([0-9a-f-]{36}):(\d+):([\s\S]*)$/.exec(content)
@@ -70,6 +75,8 @@ export function messagePreview(content: string): string {
   if (isPoll(content)) return '📊 Poll'
   const file = sharedFile(content)
   if (file) return `📎 ${file.name}`
+  const daily = dailyResult(content)
+  if (daily) return `📅 Wordle Daily #${daily.number} ${daily.score}/6`
   const st = sticker(content)
   if (st) return `🖼️ ${st.name}`
   const clip = sharedClip(content)
