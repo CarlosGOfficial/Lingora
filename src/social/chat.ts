@@ -22,8 +22,20 @@ export const GIPHY_ID_RE = /^[A-Za-z0-9]{4,64}$/
 //   IMG:<chat image id>         an uploaded picture (or GIF file)
 //   GIF:<giphy id>              a GIF from the GIPHY search
 // Typed text that starts with one of these gets a leading space, so only real cards render.
-// (VOICE: and POLL: come from Banter: a voice message, and a poll you vote on in Banter.)
-const CARD_RE = /^(INVITE|PARTY|CLIP|IMG|GIF|VOICE|POLL):/
+// (VOICE:, POLL:, FILE: and STICKER: come from Banter: a voice message, a poll you vote on in
+// Banter, a file to download and a server sticker.)
+const CARD_RE = /^(INVITE|PARTY|CLIP|IMG|GIF|VOICE|POLL|FILE|STICKER):/
+/** A file from Banter: FILE:<id>:<bytes>:<name>. */
+export function sharedFile(content: string): { id: string; bytes: number; name: string } | null {
+  const m = /^FILE:([0-9a-f-]{36}):(\d+):([\s\S]*)$/.exec(content)
+  return m ? { id: m[1], bytes: Number(m[2]), name: m[3] || 'file' } : null
+}
+/** A Banter server sticker: STICKER:<picture id>:<name>. */
+export function sticker(content: string): { image: string; name: string } | null {
+  const m = /^STICKER:([0-9a-f-]{36}):([\s\S]*)$/.exec(content)
+  return m ? { image: m[1], name: m[2] || 'Sticker' } : null
+}
+export const fileSize = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`)
 /** A voice message from Banter: VOICE:<id>:<secs>:<peaks>. */
 export function voiceNote(content: string): { id: string; secs: number } | null {
   const m = /^VOICE:([0-9a-f-]{36}):(\d{1,3})/.exec(content)
@@ -56,6 +68,10 @@ export function messagePreview(content: string): string {
   const voice = voiceNote(content)
   if (voice) return `🎤 Voice message (${Math.floor(voice.secs / 60)}:${String(voice.secs % 60).padStart(2, '0')})`
   if (isPoll(content)) return '📊 Poll'
+  const file = sharedFile(content)
+  if (file) return `📎 ${file.name}`
+  const st = sticker(content)
+  if (st) return `🖼️ ${st.name}`
   const clip = sharedClip(content)
   if (clip) return `🎬 Shared a clip: ${clip.title}`
   const text = content.trimStart()

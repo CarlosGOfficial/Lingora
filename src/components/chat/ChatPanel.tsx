@@ -9,6 +9,9 @@ import {
   imageId,
   isPoll,
   voiceNote,
+  sharedFile,
+  sticker,
+  fileSize,
   inviteCode,
   isEmoji,
   isPlainText,
@@ -159,6 +162,17 @@ export function MessageBody({ content, mine, sender, me, onMediaLoad }: { conten
       </div>
     )
   }
+  const file = sharedFile(content)
+  if (file) {
+    return (
+      <a className="file-card" href={`/api/files/${file.id}`} download={file.name} data-testid="file-card">
+        <span className="file-icon">📎</span>
+        <span><strong>{file.name}</strong><small>{fileSize(file.bytes)} · Download</small></span>
+      </a>
+    )
+  }
+  const st = sticker(content)
+  if (st) return <img className="sticker" src={chatImageUrl(st.image)} alt={st.name} title={st.name} onLoad={onMediaLoad} data-testid="sticker" />
   if (isPoll(content)) {
     return (
       <WordleCard icon="📊" title="Poll" text={`${mine ? 'You' : sender} started a poll. Vote in Banter.`} href={links?.banterUrl ? `${links.banterUrl}/chats` : undefined} action="Open Banter" />

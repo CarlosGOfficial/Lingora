@@ -1625,3 +1625,10 @@ input[type='range'] { accent-color: var(--accent); }
 .join-wordle:hover { background: #6aaa64; color: #fff; }
 .voice-card { display: flex; flex-direction: column; gap: 6px; width: 270px; max-width: 100%; padding: 10px 12px; border-radius: 16px; border: 1px solid var(--glass-border); background: var(--surface); }
 .voice-card audio { width: 100%; height: 36px; }
+.file-card { display: flex; align-items: center; gap: 10px; width: 270px; max-width: 100%; padding: 10px 12px; border-radius: 16px; border: 1px solid var(--glass-border); background: var(--surface); color: inherit; text-decoration: none; }
+.file-card:hover { filter: brightness(1.03); }
+.file-card .file-icon { font-size: 24px; }
+.file-card span:last-child { display: flex; min-width: 0; flex-direction: column; }
+.file-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-card small { opacity: 0.7; }
+.sticker { width: 128px; height: 128px; object-fit: contain; }

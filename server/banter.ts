@@ -133,6 +133,20 @@ export function registerBanterRoutes(app: Hono<Env, any, any>) {
     }
   })
 
+  // Files sent from Banter (chat.files): always downloaded, never shown inline.
+  app.get('/files/:id', requireUser, async (c) => {
+    try {
+      const [row] = await db()`select name, data from chat.files where id = ${c.req.param('id')}`
+      if (!row) return c.body(null, 404)
+      return c.body(Buffer.from(row.data as string, 'base64'), 200, {
+        'Content-Type': 'application/octet-stream', 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(row.name as string)}`,
+        'Cache-Control': 'private, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox",
+      })
+    } catch {
+      return c.body(null, 404)
+    }
+  })
+
   // A Banter server invite, for the card in chats: name, icon and size.
   app.get('/banter/invites/:code', requireUser, async (c) => {
     const code = c.req.param('code')
