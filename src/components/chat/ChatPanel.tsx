@@ -7,6 +7,8 @@ import {
   giphyPreviewUrl,
   giphyUrl,
   imageId,
+  isPoll,
+  voiceNote,
   inviteCode,
   isEmoji,
   isPlainText,
@@ -147,6 +149,21 @@ export function MessageBody({ content, mine, sender, me, onMediaLoad }: { conten
   const code = inviteCode(content)
   const party = partyCode(content)
   if (img) return <MediaMessage src={chatImageUrl(img)} alt="Photo" onLoad={onMediaLoad} />
+  const voice = voiceNote(content)
+  if (voice) {
+    // Voice messages are great for language practice: replay as often as you like.
+    return (
+      <div className="voice-card">
+        <strong>🎤 Voice message</strong>
+        <audio controls preload="metadata" src={`/api/voice-notes/${voice.id}`} />
+      </div>
+    )
+  }
+  if (isPoll(content)) {
+    return (
+      <WordleCard icon="📊" title="Poll" text={`${mine ? 'You' : sender} started a poll. Vote in Banter.`} href={links?.banterUrl ? `${links.banterUrl}/chats` : undefined} action="Open Banter" />
+    )
+  }
   if (gif) return <MediaMessage src={giphyUrl(gif)} alt="GIF" onLoad={onMediaLoad} giphy />
   const w = links?.wordleUrl
   if (clip) return <WordleCard icon="🎬" title={clip.title} text={`${mine ? 'You' : sender} shared a clip from Wordle Unlimited.`} href={w} action="Watch in Wordle" />

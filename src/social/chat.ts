@@ -22,7 +22,14 @@ export const GIPHY_ID_RE = /^[A-Za-z0-9]{4,64}$/
 //   IMG:<chat image id>         an uploaded picture (or GIF file)
 //   GIF:<giphy id>              a GIF from the GIPHY search
 // Typed text that starts with one of these gets a leading space, so only real cards render.
-const CARD_RE = /^(INVITE|PARTY|CLIP|IMG|GIF):/
+// (VOICE: and POLL: come from Banter: a voice message, and a poll you vote on in Banter.)
+const CARD_RE = /^(INVITE|PARTY|CLIP|IMG|GIF|VOICE|POLL):/
+/** A voice message from Banter: VOICE:<id>:<secs>:<peaks>. */
+export function voiceNote(content: string): { id: string; secs: number } | null {
+  const m = /^VOICE:([0-9a-f-]{36}):(\d{1,3})/.exec(content)
+  return m ? { id: m[1], secs: Number(m[2]) } : null
+}
+export const isPoll = (content: string) => /^POLL:\d+$/.test(content)
 export const inviteCode = (content: string) => (content.startsWith('INVITE:') ? content.slice(7) : null)
 export const partyCode = (content: string) => (content.startsWith('PARTY:') ? content.slice(6) : null)
 export function sharedClip(content: string): { recordingId: string; title: string } | null {
@@ -46,6 +53,9 @@ export function messagePreview(content: string): string {
   if (partyCode(content)) return '🍿 Watch party invite'
   if (imageId(content)) return '📷 Photo'
   if (gifId(content)) return 'GIF'
+  const voice = voiceNote(content)
+  if (voice) return `🎤 Voice message (${Math.floor(voice.secs / 60)}:${String(voice.secs % 60).padStart(2, '0')})`
+  if (isPoll(content)) return '📊 Poll'
   const clip = sharedClip(content)
   if (clip) return `🎬 Shared a clip: ${clip.title}`
   const text = content.trimStart()

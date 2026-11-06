@@ -1623,3 +1623,5 @@ input[type='range'] { accent-color: var(--accent); }
 @media (max-width: 560px) { .profile-card.with-banner { flex-wrap: wrap; } .profile-card.with-banner .person-text { flex: 1 1 0; min-width: 0; } .profile-card.with-banner > a.btn { width: 100%; justify-content: center; } }
 .join-wordle { background: rgb(106 170 100 / 15%); color: #3f8a39; font-weight: 800; text-decoration: none; }
 .join-wordle:hover { background: #6aaa64; color: #fff; }
+.voice-card { display: flex; flex-direction: column; gap: 6px; width: 270px; max-width: 100%; padding: 10px 12px; border-radius: 16px; border: 1px solid var(--glass-border); background: var(--surface); }
+.voice-card audio { width: 100%; height: 36px; }

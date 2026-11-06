@@ -120,6 +120,19 @@ export function registerBanterRoutes(app: Hono<Env, any, any>) {
     }
   })
 
+  // Voice messages sent from Banter (chat.voice_notes). Ids are random: only people who got the message can find them.
+  app.get('/voice-notes/:id', requireUser, async (c) => {
+    try {
+      const [row] = await db()`select mime, data from chat.voice_notes where id = ${c.req.param('id')}`
+      if (!row) return c.body(null, 404)
+      return c.body(Buffer.from(row.data as string, 'base64'), 200, {
+        'Content-Type': row.mime as string, 'Cache-Control': 'private, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff',
+      })
+    } catch {
+      return c.body(null, 404)
+    }
+  })
+
   // A Banter server invite, for the card in chats: name, icon and size.
   app.get('/banter/invites/:code', requireUser, async (c) => {
     const code = c.req.param('code')
