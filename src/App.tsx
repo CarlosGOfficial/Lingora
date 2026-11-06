@@ -13,6 +13,8 @@ import { PracticeSession } from './screens/PracticeSession'
 import { ProfilePage } from './screens/ProfilePage'
 import { PublicSite } from './screens/public/PublicSite'
 import { ReadingPage } from './screens/ReadingPage'
+import { StoriesPage, StoryPage } from './screens/StoriesPage'
+import { GoalsPage } from './screens/GoalsPage'
 import { ReviewPage } from './screens/ReviewPage'
 import { SectionTestPage } from './screens/SectionTestPage'
 import { SectionsPage } from './screens/SectionsPage'
@@ -77,6 +79,7 @@ function MainApp() {
       <Routes>
         <Route path="/lesson/:lessonId" element={<Remount param="lessonId"><LessonPage /></Remount>} />
         <Route path="/reading/:readingId" element={<Remount param="readingId"><ReadingPage /></Remount>} />
+        <Route path="/story/:storyId" element={<Remount param="storyId"><StoryPage /></Remount>} />
         <Route path="/unit-review/:unitId" element={<Remount param="unitId"><UnitReviewPage /></Remount>} />
         <Route path="/conversation" element={<ConversationPage />} />
         <Route path="/section-test/:index" element={<Remount param="index"><SectionTestPage /></Remount>} />
@@ -94,6 +97,8 @@ function MainApp() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/guide/:unitId" element={<GuidebookPage />} />
           <Route path="/shop" element={<ShopPage />} />
+          <Route path="/stories" element={<StoriesPage />} />
+          <Route path="/goals" element={<GoalsPage />} />
           <Route path="/themes" element={<ThemeStudioPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

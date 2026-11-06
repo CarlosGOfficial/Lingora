@@ -79,6 +79,12 @@ export function UserProfilePage() {
             <Stat tone="xp" label="Words" value={p.lingora.words} />
             <Stat tone="flame" label="Active days" value={p.lingora.activeDays} />
           </section>
+          {!!p.lingora.badges?.length && (
+            <section className="card">
+              <h2>🏅 Badges</h2>
+              <div className="row wrap">{p.lingora.badges.map((b) => <span key={b.id} className="pill" title={b.name}>{b.icon} {b.name}</span>)}</div>
+            </section>
+          )}
           <section className="stack-sm">
             <h2>Courses</h2>
             {p.lingora.courses.length === 0 && <p className="small muted">Hasn’t finished a lesson yet.</p>}

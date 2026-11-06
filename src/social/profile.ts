@@ -49,6 +49,8 @@ export interface PublicProfile extends ChatPerson {
     words: number
     activeLang: LangCode | null
     courses: CourseProgress[]
+    /** Lingora badges they've unlocked (newest first). */
+    badges?: { id: string; name: string; icon: string }[]
   } | null
   /** A glance at their Wordle Unlimited record (null if they've never played). */
   wordle: { roundsWon: number; roundsPlayed: number; bestWinStreak: number } | null

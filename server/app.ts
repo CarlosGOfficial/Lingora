@@ -3,7 +3,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { HTTPException } from 'hono/http-exception'
 import type { LangCode } from '../src/content/types'
 import { DAILY_REWARDS, SHOP_ITEM_BY_ID, dailyReward, dayNumber, dealPrice } from '../src/shop/catalog'
-import { coinBalance } from '../src/shop/wallet'
+import { chargePurchase, settleCoins, walletOf } from './economy'
 import type { Account, Outbox, Prefs, SavedTheme, Snapshot, SyncRequest } from '../src/sync/types'
 import { MAX_SAVED_THEMES, isCustomTheme } from '../src/theme/themes'
 import Anthropic from '@anthropic-ai/sdk'
@@ -16,6 +16,7 @@ import { FailureLimiter, SESSION_COOKIE, clientIp, currentUserId, db, fail, rate
 import { registerPushRoutes } from './push'
 import { registerSocialRoutes } from './social'
 import { registerBanterRoutes } from './banter'
+import { checkAchievements, registerGoalRoutes } from './goals'
 
 const SESSION_DAYS = 30
 const LANGS: LangCode[] = ['zh', 'ja', 'pt']
@@ -176,20 +177,17 @@ app.post('/sync', requireUser, async (c) => {
     writes.push(s`update lingora_profiles set prefs = ${JSON.stringify(body.prefs)}::jsonb where user_id = ${uid}`)
   if (writes.length) await s.transaction(writes)
 
-  // Purchases go in last, in time order, and only while the wallet covers them, so a
-  // modified client can't spend coins it never earned (rejected ones vanish on sync).
+  // Coins live in the shared wallet (users.coins, Wordle's). Pay what's new, then charge
+  // purchases in time order, only while the wallet covers them (rejected ones vanish on sync).
+  await settleCoins(uid)
+  // New achievements (and their coins), worked out from what just synced.
+  await checkAchievements(uid, xp.length ? xp[xp.length - 1].day : new Date().toISOString().slice(0, 10)).catch((err) => console.warn('Achievements:', err))
   if (purchases.length) {
-    const [w] = await s`select
-      (select coalesce(sum(xp), 0)::int from lingora_xp_events where user_id = ${uid}) as xp,
-      (select coalesce(sum(coins), 0)::int from lingora_daily_claims where user_id = ${uid}) as claimed,
-      (select coalesce(sum(price), 0)::int from lingora_purchases where user_id = ${uid}) as spent`
     const known = new Set((await s`select client_id from lingora_purchases where user_id = ${uid}`).map((r) => r.client_id))
-    let balance = coinBalance(w.xp, { purchases: [{ id: '', itemId: '', price: w.spent, at: 0 }], claims: [{ day: 0, streakDay: 1, coins: w.claimed, at: 0 }] })
     for (const p of [...purchases].sort((x, y) => x.at - y.at)) {
-      if (known.has(p.id) || p.price > balance) continue
-      const added = await s`insert into lingora_purchases (user_id, client_id, item_id, price, at_ms)
-        values (${uid}, ${p.id}, ${p.itemId}, ${p.price}, ${p.at}) on conflict do nothing returning client_id`
-      if (added.length) balance -= p.price
+      if (known.has(p.id) || !(await chargePurchase(uid, p.id, p.price))) continue
+      await s`insert into lingora_purchases (user_id, client_id, item_id, price, at_ms)
+        values (${uid}, ${p.id}, ${p.itemId}, ${p.price}, ${p.at}) on conflict do nothing`
     }
   }
 
@@ -204,6 +202,7 @@ app.post('/sync', requireUser, async (c) => {
   ])
   const snapshot: Snapshot = {
     account: acct,
+    wallet: await walletOf(uid),
     reviews: reviewRows.map((r) => ({ id: r.client_id, itemId: r.item_id, lang: r.lang, rating: r.rating, at: Number(r.at_ms) })),
     imports: importRows.map((r) => ({ itemId: r.item_id, lang: r.lang, state: r.state })),
     xp: xpRows.map((r) => ({ lang: r.lang, day: r.day, xp: r.xp })),
@@ -248,6 +247,7 @@ app.post('/progress/reset', requireUser, async (c) => {
 /* ---------- Friends, chats and groups: server/social.ts ---------- */
 registerSocialRoutes(app)
 registerBanterRoutes(app)
+registerGoalRoutes(app)
 registerPushRoutes(app)
 
 /* ---------- Saved themes (the same table and shape as Wordle Unlimited) ---------- */
@@ -356,7 +356,7 @@ function validateOutbox(raw: unknown): Outbox {
   const ok =
     out.reviews.every((r) => id(r.id) && id(r.itemId) && lang(r.lang) && [1, 2, 3, 4].includes(r.rating) && time(r.at)) &&
     out.xp.every((e) => id(e.id) && lang(e.lang) && int(e.xp) && e.xp >= 0 && e.xp <= 1000 && DAY_RE.test(e.day) && time(e.at)) &&
-    out.completions.every((e) => id(e.refId) && lang(e.lang) && (e.kind === 'lesson' || e.kind === 'reading') && time(e.at)) &&
+    out.completions.every((e) => id(e.refId) && lang(e.lang) && (e.kind === 'lesson' || e.kind === 'reading' || e.kind === 'story') && time(e.at)) &&
     out.imports.every((e) => id(e.itemId) && lang(e.lang) && e.state && typeof e.state === 'object' && typeof e.state.stability === 'number') &&
     // A purchase must name a real item and pay at least its deal price.
     out.purchases.every((p) => {

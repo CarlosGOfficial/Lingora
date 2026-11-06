@@ -8,7 +8,7 @@ import { buildPractice, effectiveOpts, type PracticeMode } from '../engine/exerc
 import { sessionXp, type XpBreakdown } from '../engine/xp'
 import { useStore } from '../store/useStore'
 
-const MODES: PracticeMode[] = ['speaking', 'listening', 'weak']
+const MODES: PracticeMode[] = ['speaking', 'listening', 'weak', 'writing']
 
 export function PracticeSession() {
   const { mode = '' } = useParams()
@@ -19,6 +19,7 @@ export function PracticeSession() {
     if (!MODES.includes(mode as PracticeMode)) return []
     const opts = effectiveOpts({ listening: true, speaking: true }, course)
     if (mode === 'listening' && !opts.listening) return []
+    if (mode === 'writing' && course.lang === 'pt') return []
     const items = Object.values(progress[activeLang].cards)
       .sort((a, b) => a.stability - b.stability)
       .map((c) => getItem(c.itemId))

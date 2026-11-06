@@ -57,6 +57,19 @@ export function Home() {
 
       <VoiceNotice course={course} />
 
+      <div className="mode-grid home-extras">
+        <Link to="/stories" className="mode-card" data-testid="home-stories">
+          <span className="mode-icon"><Icon name="book" size={22} /></span>
+          <strong>Stories</strong>
+          <span className="muted small">Short scenes with audio and questions</span>
+        </Link>
+        <Link to="/goals" className="mode-card" data-testid="home-goals">
+          <span className="mode-icon"><Icon name="target" size={22} /></span>
+          <strong>Goals</strong>
+          <span className="muted small">Quests, your league, challenges, badges</span>
+        </Link>
+      </div>
+
       <section className="dash stagger">
         <div className="dash-card">
           <Icon name="flame" filled size={30} className={s > 0 ? 'c-flame' : 'c-muted'} />

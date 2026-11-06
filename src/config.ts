@@ -17,6 +17,7 @@ export const XP = {
   reviewBase: 10,
   practiceBase: 5,
   reading: 15,
+  story: 20,
   perfectBonus: 5,
   /** +1 XP every time the combo reaches a multiple of this… */
   comboStep: 5,

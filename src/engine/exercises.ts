@@ -1,3 +1,4 @@
+import { traceable } from '../components/exercises/Write'
 import { allItems, getGrammar } from '../content'
 import type { Course, GrammarPoint, Item, Lesson, Unit } from '../content/types'
 import type { CardRecord, Settings } from '../store/useStore'
@@ -14,6 +15,8 @@ export type Exercise =
   | { type: 'match'; items: Item[] }
   | { type: 'build'; item: Item; bank: string[] }
   | { type: 'speak'; item: Item }
+  /** Trace one character of the word, stroke by stroke (zh / ja). */
+  | { type: 'write'; item: Item; char: string }
   | { type: 'grammar'; point: GrammarPoint }
   /** A sentence with one word missing; pick the word. */
   | { type: 'cloze'; item: Item; blank: number; options: string[] }
@@ -116,6 +119,9 @@ export function buildLesson(lesson: Lesson, course: Course, opts: Opts): Exercis
   ex.push(...present(sample(lesson.sentences, lesson.sentences.length).map((s) => cloze(s, pool))).slice(0, 1))
   if (opts.speaking) sample(lesson.sentences.length ? lesson.sentences : words, 2).forEach((it) => ex.push({ type: 'speak', item: it }))
   if (opts.listening && lesson.sentences.length) ex.push({ type: 'dictation', item: sample(lesson.sentences, 1)[0] })
+  // Writing practice: trace a character from one of the new words.
+  const writable = words.filter((w) => canWrite(course, w))
+  if (writable.length) ex.push(writeEx(sample(writable, 1)[0]))
   return ex
 }
 
@@ -155,13 +161,14 @@ export function buildReview(cards: { card: CardRecord; item: Item }[], course: C
       if (fill) options.push(() => fill)
       if (opts.listening) options.push(() => ({ type: 'dictation', item }))
       if (opts.speaking) options.push(() => ({ type: 'speak', item }))
+      if (canWrite(course, item)) options.push(() => writeEx(item))
       options.push(() => mcq(item, pool, 'meaning'))
     }
     return options[Math.floor(Math.random() * options.length)]()
   })
 }
 
-export type PracticeMode = 'speaking' | 'listening' | 'weak'
+export type PracticeMode = 'speaking' | 'listening' | 'weak' | 'writing'
 
 export function buildPractice(mode: PracticeMode, items: Item[], course: Course, opts: Opts): Exercise[] {
   const pool = allItems(course)
@@ -173,6 +180,10 @@ export function buildPractice(mode: PracticeMode, items: Item[], course: Course,
   if (mode === 'listening') {
     return sample(items, 8).map((item, i) => (i % 2 === 0 ? { type: 'dictation', item } : mcq(item, pool, 'audio')))
   }
+  if (mode === 'writing') {
+    // One character from each of 8 learned words, weakest first, then shuffled.
+    return shuffle(items.filter((i) => i.kind === 'word' && traceable(i.target).length).slice(0, 8)).map((item) => writeEx(item))
+  }
   // weak: items arrive pre-sorted by lowest stability
   return items.slice(0, 10).map((item, i) => {
     const kinds: (() => Exercise)[] = [() => ({ type: 'type', item }), () => mcq(item, pool, 'meaning')]
@@ -180,6 +191,14 @@ export function buildPractice(mode: PracticeMode, items: Item[], course: Course,
     return kinds[i % kinds.length]()
   })
 }
+
+/** Tracing: one character of the word (the least common-looking one: the first that isn't kana, if any). */
+export function writeEx(item: Item): Exercise {
+  const chars = traceable(item.target)
+  const pick = chars.find((c) => /[\u4e00-\u9fff]/.test(c)) ?? chars[Math.floor(Math.random() * chars.length)]
+  return { type: 'write', item, char: pick }
+}
+const canWrite = (course: Course, item: Item) => (course.lang === 'zh' || course.lang === 'ja') && item.kind === 'word' && traceable(item.target).length > 0
 
 export function exerciseItems(ex: Exercise): Item[] {
   if (ex.type === 'grammar') return []

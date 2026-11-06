@@ -12,6 +12,8 @@
  * daily claims) rather than mutable state. Every device replays the same log, so
  * syncing never overwrites newer work.
  */
+import { ECONOMY_SCHEMA } from './economy'
+import { GOALS_SCHEMA } from './goals'
 import { PUSH_SCHEMA } from './push'
 
 export const SCHEMA: string[] = [
@@ -155,7 +157,7 @@ export const SCHEMA: string[] = [
     user_id text not null references users(id) on delete cascade,
     ref_id text not null,
     lang text not null,
-    kind text not null check (kind in ('lesson', 'reading')),
+    kind text not null check (kind in ('lesson', 'reading', 'story')),
     at_ms bigint not null,
     primary key (user_id, ref_id)
   )`,
@@ -179,4 +181,7 @@ export const SCHEMA: string[] = [
   )`,
   // Push notifications, shared with Banter and Wordle (server/push.ts).
   ...PUSH_SCHEMA,
+  // Coins paid into the shared wallet (server/economy.ts), and the rest of Phase C.
+  ...ECONOMY_SCHEMA,
+  ...GOALS_SCHEMA,
 ]

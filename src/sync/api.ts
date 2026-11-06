@@ -3,6 +3,8 @@ import type { CustomTheme } from '../theme/themes'
 import type { LangCode } from '../content/types'
 import type { ChatBody, ChatKind, ChatMessage, GifResult, GroupSummary } from '../social/chat'
 import type { Notifications, PublicProfile } from '../social/profile'
+import type { GoalsView } from '../content/goals'
+import { dayKey as localDay } from '../lib/date'
 import type { Account, FriendsData, SavedTheme, Snapshot, SyncRequest } from './types'
 
 const chatPath = (kind: ChatKind, id: string) => (kind === 'dm' ? `/dm/${encodeURIComponent(id)}` : `/groups/${encodeURIComponent(id)}/messages`)
@@ -41,6 +43,10 @@ export const api = {
   loginPin: (pin: string) => request<Account>('/auth/login-pin', { body: { pin } }),
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   sync: (body: SyncRequest) => request<Snapshot>('/sync', { body }),
+  goals: () => request<GoalsView>(`/goals?day=${localDay()}&tz=${new Date().getTimezoneOffset()}`),
+  claimQuest: (questId: string) => request<{ coins: number }>('/goals/quests/claim', { body: { day: localDay(), tz: new Date().getTimezoneOffset(), questId } }),
+  challenge: (to: string, hours: number) => request<{ id: number }>('/challenges', { body: { to, hours } }),
+  answerChallenge: (id: number, action: 'accept' | 'decline') => request<{ ok: true }>(`/challenges/${id}/${action}`, { method: 'POST' }),
   resetProgress: (lang?: LangCode) => request<{ ok: boolean }>('/progress/reset', { body: lang ? { lang } : {}, method: 'POST' }),
   presence: (detail?: { lang: string; doing: string }) => request<{ ok: boolean }>('/presence', { method: 'POST', body: detail ?? {} }),
   friends: (today: string) => request<FriendsData>(`/friends?today=${today}`),

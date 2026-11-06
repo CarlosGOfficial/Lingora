@@ -61,6 +61,7 @@ export function syncNow(): Promise<void> {
       useStore.setState({
         ...derive(merged, dayKey()),
         account: snap.account,
+        wallet: typeof snap.wallet === 'number' ? snap.wallet : null,
         name: snap.account.username,
         outbox: remaining,
         lastSyncedAt: Date.now(),

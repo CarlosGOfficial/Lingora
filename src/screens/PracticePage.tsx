@@ -12,6 +12,7 @@ const MODES: { mode: string; title: string; desc: string; icon: IconName }[] = [
   { mode: 'speaking', title: 'Speaking · Shadowing', desc: 'Hear it, say it, get a pronunciation match score.', icon: 'mic' },
   { mode: 'listening', title: 'Listening · Dictation', desc: 'Train your ear — type and pick what you hear.', icon: 'headphones' },
   { mode: 'weak', title: 'Weak words', desc: 'Drill the items with the lowest memory stability.', icon: 'target' },
+  { mode: 'writing', title: 'Writing · Stroke order', desc: 'Trace characters stroke by stroke, in the right order and direction.', icon: 'pencil' },
 ]
 
 export function PracticePage() {
@@ -49,6 +50,7 @@ export function PracticePage() {
           </Link>
         )}
         {MODES.map((m) => {
+          if (m.mode === 'writing' && course.lang === 'pt') return null
           const ok = enough && (m.mode !== 'listening' || voice)
           return (
             <Link key={m.mode} to={ok ? `/practice/${m.mode}` : '#'} className={`mode-card ${ok ? '' : 'disabled'}`} aria-disabled={!ok}>

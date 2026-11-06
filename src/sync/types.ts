@@ -24,7 +24,7 @@ export interface XpEvent {
 export interface CompletionEvent {
   refId: string
   lang: LangCode
-  kind: 'lesson' | 'reading'
+  kind: 'lesson' | 'reading' | 'story'
   at: number
 }
 
@@ -71,6 +71,8 @@ export interface SyncRequest {
 
 export interface Snapshot {
   account: Account
+  /** Coins in the shared wallet (Wordle Unlimited's), after this sync. */
+  wallet?: number
   reviews: ReviewEvent[]
   imports: CardImport[]
   xp: { lang: LangCode; day: string; xp: number }[]

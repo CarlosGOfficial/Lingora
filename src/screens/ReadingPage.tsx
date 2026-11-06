@@ -1,3 +1,4 @@
+import { ReadingToggle } from '../components/ReadingToggle'
 import { useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { AudioButton } from '../components/AudioButton'
@@ -12,7 +13,7 @@ export function ReadingPage() {
   const { readingId = '' } = useParams()
   const navigate = useNavigate()
   const found = findReading(readingId)
-  const { recordSession, streak, settings, updateSettings } = useStore()
+  const { recordSession, streak } = useStore()
   const [shown, setShown] = useState<Record<number, boolean>>({})
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [done, setDone] = useState<{ streakBefore: number; accuracy: number } | null>(null)
@@ -35,10 +36,7 @@ export function ReadingPage() {
         <h1 className="reading-title" lang={course.bcp47}>
           {reading.title}
         </h1>
-        <label className="toggle small">
-          <input type="checkbox" checked={settings.showReading} onChange={(e) => updateSettings({ showReading: e.target.checked })} />
-          {course.readingLabel ?? 'Hints'}
-        </label>
+        <ReadingToggle course={course} />
       </header>
 
       <div className="reading-body">

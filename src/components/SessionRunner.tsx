@@ -1,3 +1,5 @@
+import { Write } from './exercises/Write'
+import { ReadingToggle } from './ReadingToggle'
 import { useEffect, useRef, useState } from 'react'
 import type { Course } from '../content/types'
 import { exerciseItems, type Exercise } from '../engine/exercises'
@@ -58,6 +60,8 @@ function ExerciseView(props: { ex: Exercise; course: Course; locked: boolean; on
       return <Cloze {...props} ex={ex} />
     case 'reading':
       return <ReadingDrill {...props} ex={ex} />
+    case 'write':
+      return <Write {...props} ex={ex} />
   }
 }
 
@@ -151,6 +155,7 @@ export function SessionRunner({ exercises, course, onFinish, onExit }: Props) {
         <span key={combo >= 2 ? combo : 'off'} className={`combo-chip ${combo >= 2 ? 'on' : ''}`} aria-live="polite" title="Correct answers in a row">
           <Icon name="flame" filled size={18} /> {combo}
         </span>
+        <ReadingToggle course={course} />
       </header>
 
       <main className="session-body">

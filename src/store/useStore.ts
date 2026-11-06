@@ -26,6 +26,8 @@ export interface Settings {
   listening: boolean
   speaking: boolean
   showReading: boolean
+  /** Per language: furigana (ja) / pinyin (zh) on or off; falls back to showReading. */
+  readingByLang?: Partial<Record<LangCode, boolean>>
   speechRate: number
 }
 
@@ -37,6 +39,8 @@ export interface SessionInput {
   /** Several lessons at once (passing a section's "jump here" test completes everything before it). */
   lessonIds?: string[]
   readingId?: string
+  /** A finished story (stored with readings, synced as kind 'story'). */
+  storyId?: string
 }
 
 const lessonIdsOf = (s: SessionInput) => [...new Set([...(s.lessonId ? [s.lessonId] : []), ...(s.lessonIds ?? [])])]
@@ -68,6 +72,8 @@ interface State {
   lastSyncedAt: number | null
   syncError: string | null
   shop: ShopLog
+  /** Coins in the shared wallet (Wordle Unlimited's) at the last sync; null when not signed in. */
+  wallet: number | null
   appearance: Appearance
   /** Using Lingora without an account (only offered when the server can't hold accounts). */
   guest: boolean
@@ -117,6 +123,7 @@ const initial = () => ({
   lastSyncedAt: null as number | null,
   syncError: null as string | null,
   shop: emptyShopLog(),
+  wallet: null,
   appearance: {
     theme: 'system',
     custom: DEFAULT_CUSTOM_THEME,
@@ -144,7 +151,8 @@ export const useStore = create<State>()(
       },
 
       recordSession(input) {
-        const { lang, xp, ratings, readingId } = input
+        const { lang, xp, ratings, storyId } = input
+        const readingId = input.readingId ?? storyId
         const now = Date.now()
         const today = dayKey()
         const state = get()
@@ -231,7 +239,7 @@ export const useStore = create<State>()(
         if (!item) return 'That item doesn’t exist.'
         const xp = totalXp(s.xpByDay)
         const why = cannotBuy(item, {
-          coins: coinBalance(xp, s.shop),
+          coins: coinsNow(s),
           level: levelFromXp(xp),
           owned: ownedItems(s.shop),
           held: (id) => (id === 'pw_freeze' ? s.streak.freezes : 0),
@@ -306,6 +314,7 @@ function queueEvents(outbox: Outbox, deviceId: string, now: number, today: strin
       ...outbox.completions,
       ...lessonIdsOf(s).map((refId) => ({ refId, lang: s.lang, kind: 'lesson' as const, at: now })),
       ...(s.readingId ? [{ refId: s.readingId, lang: s.lang, kind: 'reading' as const, at: now }] : []),
+      ...(s.storyId ? [{ refId: s.storyId, lang: s.lang, kind: 'story' as const, at: now }] : []),
     ],
   }
 }
@@ -334,3 +343,17 @@ export function dueCards(prog: LangProgress, now = Date.now()): CardRecord[] {
 export function liveStreak(streak: Streak): number {
   return reconcile(streak, dayKey()).current
 }
+
+/**
+ * Coins you can spend right now. Signed in, that's the shared wallet from the last sync,
+ * plus what's waiting to sync (XP, daily rewards) minus purchases waiting to sync. Without
+ * an account it's the old local count.
+ */
+export function coinsNow(s: Pick<State, 'wallet' | 'outbox' | 'shop' | 'xpByDay' | 'account'>): number {
+  if (!s.account || s.wallet === null) return coinBalance(totalXp(s.xpByDay), s.shop)
+  const pending = s.outbox.xp.reduce((n, e) => n + e.xp, 0) + s.outbox.claims.reduce((n, c) => n + c.coins, 0)
+  return s.wallet + pending - s.outbox.purchases.reduce((n, p) => n + p.price, 0)
+}
+
+/** Are readings (furigana / pinyin / romaji) shown for this language? */
+export const readingOn = (s: Settings, lang: LangCode) => s.readingByLang?.[lang] ?? s.showReading

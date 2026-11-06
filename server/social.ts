@@ -1,3 +1,4 @@
+import { ACHIEVEMENTS } from '../src/content/goals'
 import type { Hono } from 'hono'
 import type { LangCode } from '../src/content/types'
 import { dayKey, daysBetween, weekStart } from '../src/lib/date'
@@ -647,6 +648,8 @@ export function registerSocialRoutes(app: Hono<Env, any, any>) {
         activeLang: activeLang && LANGS.includes(activeLang) ? activeLang : null,
         // Courses they've started first (most XP first).
         courses: courses.filter((c) => c.xp > 0 || c.lessons > 0).sort((a, b) => b.xp - a.xp),
+        badges: (await s`select achievement_id from lingora_achievements where user_id = ${u.id} order by unlocked_at desc`.catch(() => [] as { achievement_id: string }[]))
+          .flatMap((r) => { const a = ACHIEVEMENTS.find((x) => x.id === r.achievement_id); return a ? [{ id: a.id, name: a.name, icon: a.icon }] : [] }),
       }
     }
 

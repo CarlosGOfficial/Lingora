@@ -178,6 +178,7 @@ export function ShopPage() {
         subtitle={
           <>
             Every XP you earn is a coin. Level-ups and the daily reward pay extra.
+            {signedIn && ' Your coins are shared with Wordle Unlimited: earn in either app, spend in either shop.'}
             {!signedIn && (
               <>
                 {' '}

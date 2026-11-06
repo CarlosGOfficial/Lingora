@@ -4,6 +4,8 @@ import { Hono } from 'hono'
 import { app } from './app'
 import { DATABASE_URL, IS_PROD, PORT } from './env'
 import { ensurePushTable } from './push'
+import { ensureEconomyTables } from './economy'
+import { GOALS_SCHEMA } from './goals'
 
 const root = new Hono()
 root.route('/', app)
@@ -19,6 +21,7 @@ if (IS_PROD) {
 
 // The push table is shared with Banter and Wordle; make sure it exists.
 void ensurePushTable()
+void ensureEconomyTables(GOALS_SCHEMA)
 
 serve({ fetch: root.fetch, port: PORT }, (info) => {
   console.log(`API listening on http://localhost:${info.port}`)
