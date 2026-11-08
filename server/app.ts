@@ -12,6 +12,7 @@ import { USERNAME_RE, hashPassword, hashToken, newSessionToken, verifyPassword }
 import { chatEnabled, chatTurn, validateChat } from './chat'
 import { sql, type Sql } from './db'
 import { IS_PROD } from './env'
+import { withRoute } from './ops'
 import { FailureLimiter, SESSION_COOKIE, clientIp, currentUserId, db, fail, rateLimit, requireUser, str, type Env } from './http'
 import { registerPushRoutes } from './push'
 import { registerSocialRoutes } from './social'
@@ -24,6 +25,9 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
 const MAX_EVENTS = 5000
 
 export const app = new Hono<Env>().basePath('/api')
+
+// Remember each request's route, so errors on the admin dashboard say where they happened.
+app.use('*', (c, next) => withRoute(c.req.method, c.req.path, next))
 
 app.onError((err, c) => {
   if (err instanceof HTTPException) return c.json({ error: err.message }, err.status)

@@ -6,6 +6,8 @@ import { DATABASE_URL, IS_PROD, PORT } from './env'
 import { ensurePushTable } from './push'
 import { ensureEconomyTables } from './economy'
 import { GOALS_SCHEMA } from './goals'
+import { sql } from './db'
+import { startOps } from './ops'
 
 const root = new Hono()
 root.route('/', app)
@@ -22,6 +24,9 @@ if (IS_PROD) {
 // The push table is shared with Banter and Wordle; make sure it exists.
 void ensurePushTable()
 void ensureEconomyTables(GOALS_SCHEMA)
+// Shared ops tables, error tracking and heartbeat (server/ops.ts, the same in all three apps).
+const database = sql
+if (database) void startOps('lingora', (text, params) => database.query(text, params ?? []) as Promise<any[]>)
 
 serve({ fetch: root.fetch, port: PORT }, (info) => {
   console.log(`API listening on http://localhost:${info.port}`)
