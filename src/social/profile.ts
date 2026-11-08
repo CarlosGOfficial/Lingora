@@ -36,6 +36,8 @@ export interface PublicProfile extends ChatPerson {
   lastSeen: string | null
   friends: number
   relation: ProfileRelation
+  /** You blocked them (shared with Banter and Wordle Unlimited). */
+  blockedByMe?: boolean
   /** The pending request between you (to accept, decline or cancel it). */
   requestId: number | null
   /** null until they open Lingora. */

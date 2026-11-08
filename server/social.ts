@@ -1,3 +1,4 @@
+import { BLOCKED_MESSAGE, blockedBetween, blockedByMe } from './blocks'
 import { ACHIEVEMENTS } from '../src/content/goals'
 import type { Hono } from 'hono'
 import type { LangCode } from '../src/content/types'
@@ -383,6 +384,8 @@ export function registerSocialRoutes(app: Hono<Env, any, any>) {
     const [target] = await s`select id, username, first_name from users where lower(username) = lower(${username})`
     if (!target) fail(404, 'No player with that username.')
     if (target.id === uid) fail(400, 'You can’t add yourself.')
+    // Blocked either way (in any of the three apps): no friend requests.
+    if (await blockedBetween(s, uid, target.id)) fail(403, BLOCKED_MESSAGE)
     const name = displayName(target)
     const existing = await friendshipBetween(s, uid, target.id)
     if (existing?.status === 'accepted') fail(409, `You’re already friends with ${name}.`)
@@ -445,6 +448,7 @@ export function registerSocialRoutes(app: Hono<Env, any, any>) {
     const them = c.req.param('userId')
     const s = db()
     if (!(await areFriends(s, me, them))) fail(403, 'You can only message friends.')
+    if (await blockedBetween(s, me, them)) fail(403, BLOCKED_MESSAGE)
     rateLimit(c, `chat:${me}`, 20, 60_000, 'Slow down a little — try again in a moment.')
     const body = await c.req.json().catch(() => ({}))
     const content = await chatContent(s, me, body)
@@ -664,6 +668,7 @@ export function registerSocialRoutes(app: Hono<Env, any, any>) {
       lastSeen: u.last_seen_at ? new Date(u.last_seen_at).toISOString() : null,
       friends,
       relation,
+      blockedByMe: await blockedByMe(s, me, u.id),
       requestId: link && link.status !== 'accepted' ? link.id : null,
       lingora,
       wordle: u.rounds_played > 0 ? { roundsWon: u.rounds_won ?? 0, roundsPlayed: u.rounds_played, bestWinStreak: u.best_win_streak ?? 0 } : null,

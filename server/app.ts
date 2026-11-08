@@ -16,6 +16,7 @@ import { withRoute } from './ops'
 import { FailureLimiter, SESSION_COOKIE, clientIp, currentUserId, db, fail, rateLimit, requireUser, str, type Env } from './http'
 import { registerPushRoutes } from './push'
 import { registerSocialRoutes } from './social'
+import { registerBlockRoutes } from './blocks'
 import { registerBanterRoutes } from './banter'
 import { checkAchievements, registerGoalRoutes } from './goals'
 
@@ -248,6 +249,7 @@ app.post('/progress/reset', requireUser, async (c) => {
 
 /* ---------- Friends, chats and groups: server/social.ts ---------- */
 registerSocialRoutes(app)
+registerBlockRoutes(app)
 registerBanterRoutes(app)
 registerGoalRoutes(app)
 registerPushRoutes(app)

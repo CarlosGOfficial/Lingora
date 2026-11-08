@@ -152,6 +152,29 @@ function Actions({ p, reload }: { p: PublicProfile; reload: () => Promise<void> 
     setBusy(false)
   }
   let body: React.ReactNode
+  const canBlock = p.relation !== 'self' && p.relation !== 'guest'
+  const blockButton = canBlock && (
+    <button
+      className="btn btn-ghost small"
+      disabled={busy}
+      onClick={() => window.confirm(`Block ${p.username}? They can’t send you friend requests or messages in Lingora, Banter or Wordle, and you’ll stop being friends.`) && run(() => api.block(p.id))()}
+    >
+      <Icon name="x" size={16} /> Block
+    </button>
+  )
+  if (p.blockedByMe) {
+    return (
+      <>
+        <div className="row">
+          <span className="small muted grow">You blocked {p.username}.</span>
+          <button className="btn btn-ghost small" disabled={busy} onClick={run(() => api.unblock(p.id))}>
+            Unblock
+          </button>
+        </div>
+        {error && <p className="error small">{error}</p>}
+      </>
+    )
+  }
   switch (p.relation) {
     case 'self':
       body = (
@@ -217,7 +240,10 @@ function Actions({ p, reload }: { p: PublicProfile; reload: () => Promise<void> 
   }
   return (
     <>
-      <div className="row">{body}</div>
+      <div className="row">
+        {body}
+        {blockButton}
+      </div>
       {error && <p className="error small">{error}</p>}
     </>
   )

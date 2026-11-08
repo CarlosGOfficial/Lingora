@@ -53,6 +53,8 @@ export const api = {
   requestFriend: (username: string) => request<{ status: 'pending' | 'accepted'; name: string }>('/friends/request', { body: { username } }),
   respondRequest: (requestId: number, action: 'accept' | 'decline' | 'cancel') =>
     request<{ ok: boolean }>(`/friends/requests/${requestId}/${action}`, { method: 'POST' }),
+  block: (userId: string) => request<{ ok: boolean }>(`/blocks/${encodeURIComponent(userId)}`, { method: 'PUT' }),
+  unblock: (userId: string) => request<{ ok: boolean }>(`/blocks/${encodeURIComponent(userId)}`, { method: 'DELETE' }),
   removeFriend: (userId: string) => request<{ ok: boolean }>(`/friends/${encodeURIComponent(userId)}`, { method: 'DELETE' }),
   // Chats: kind "dm" (id = their user id) or "group" (id = group id).
   messages: (kind: ChatKind, id: string) => request<ChatMessage[]>(chatPath(kind, id)),
