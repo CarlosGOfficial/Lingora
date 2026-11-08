@@ -29,7 +29,7 @@ import { NotificationsWatcher } from './social/NotificationsWatcher'
 import { usePresence } from './social/useFriends'
 import { Toaster } from './components/Toaster'
 import { refreshPush } from './lib/push'
-import { startAutoSync } from './sync/sync'
+import { adoptServerSession, startAutoSync } from './sync/sync'
 
 /** Session screens hold state; give each lesson/story/mode a fresh instance. */
 function Remount({ param, children }: { param: string; children: ReactNode }) {
@@ -55,6 +55,8 @@ export function App() {
   }, [activeLang])
 
   useEffect(() => startAutoSync(), [])
+  // Arrived signed in from Banter or Wordle Unlimited (a sign-in link)? Use that session.
+  useEffect(() => void adoptServerSession(), [])
   const accountId = useStore((s) => s.account?.id)
   useEffect(() => {
     if (accountId) void refreshPush()

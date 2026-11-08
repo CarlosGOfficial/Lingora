@@ -12,7 +12,7 @@ import { USERNAME_RE, hashPassword, hashToken, newSessionToken, verifyPassword }
 import { chatEnabled, chatTurn, validateChat } from './chat'
 import { sql, type Sql } from './db'
 import { IS_PROD } from './env'
-import { suspendedMessage, suspensionOf, withRoute } from './ops'
+import { appUrls, createHandoff, redeemHandoff, safePath, suspendedMessage, suspensionOf, withRoute } from './ops'
 import { FailureLimiter, SESSION_COOKIE, clientIp, currentUserId, db, fail, rateLimit, requireUser, str, type Env } from './http'
 import { registerPushRoutes } from './push'
 import { registerSocialRoutes } from './social'
@@ -134,6 +134,32 @@ app.post('/auth/login-pin', async (c) => {
   await startSession(c, rows[0].id as string)
   return c.json(await account(rows[0].id as string))
 })
+
+// One sign-in across the apps (server/ops.ts): a link into Banter or Wordle that signs you in there.
+app.post('/handoff', requireUser, async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const r = await createHandoff(c.get('userId'), body.to, body.path)
+  if ('error' in r) fail(400, r.error)
+  return c.json(r)
+})
+
+// Arriving from Banter or Wordle with a handoff token: sign in (if signed out, or already the
+// same person), then go to the page. A bad or used token just goes to the page.
+app.get('/handoff/redeem', async (c) => {
+  const fallback = safePath(c.req.query('to'))
+  try {
+    const h = await redeemHandoff(c.req.query('token'))
+    if (!h) return c.redirect(fallback, 302)
+    if (!(await currentUserId(c))) await startSession(c, h.userId).catch(() => {}) // suspended: just go to the page
+    return c.redirect(h.path, 302)
+  } catch (err) {
+    console.error('Handoff sign-in error:', err)
+    return c.redirect(fallback, 302)
+  }
+})
+
+// Where the other apps live (for turning links to them into signed-in links).
+app.get('/ops/apps', async (c) => c.json(await appUrls()))
 
 app.post('/auth/logout', async (c) => {
   const token = getCookie(c, SESSION_COOKIE)

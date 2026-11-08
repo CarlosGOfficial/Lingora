@@ -12,7 +12,7 @@
  * - Small shared helpers: suspensions and announcements.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 export type OpsApp = "banter" | "wordle" | "lingora";
 /** Runs one SQL statement and resolves to its rows. */
@@ -349,4 +349,61 @@ export async function handleReport(reportId: number, byId: string, action: Repor
     [reportId, action === "dismiss" ? "dismissed" : "actioned", action, byId]);
   await audit(byId, `report.${action}`, null, { reportId, kind: rep.kind, messageId: rep.message_id, serverId: rep.server_id });
   return { ok: true, id: reportId };
+}
+
+/* ---------- One sign-in across the apps (handoff links) ---------- */
+
+/*
+ * A link from one app to another carries a one-time token, so you arrive signed in. The
+ * token lasts 60 seconds, works once, only for the app it was made for, and only sends you
+ * to a page on that app (a path, never another site). The receiving app only switches
+ * accounts when it isn't signed in yet (or is already signed in as the same person).
+ */
+const HANDOFF_SECONDS = 60;
+const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
+
+/** A same-site path to go to after signing in, or "/". */
+export function safePath(path: unknown): string {
+  const p = String(path ?? "/");
+  return p.startsWith("/") && !p.startsWith("//") && !p.includes("\\") && p.length <= 500 && !/[\u0000-\u001f]/.test(p) ? p : "/";
+}
+
+/** Where the three apps live: environment variables first, then each app's heartbeat. */
+export async function appUrls(): Promise<Record<OpsApp, string | null>> {
+  const env: Record<OpsApp, string | undefined> = {
+    wordle: process.env.WORDLE_URL || process.env.VITE_WORDLE_URL,
+    banter: process.env.BANTER_URL || process.env.VITE_BANTER_URL,
+    lingora: process.env.LINGORA_URL || process.env.VITE_LINGORA_URL,
+  };
+  const beats = query ? await query(`select app, url from ops.heartbeats`).catch(() => []) : [];
+  const out = {} as Record<OpsApp, string | null>;
+  for (const app of OPS_APPS) {
+    const url = env[app] || beats.find((b) => b.app === app)?.url || null;
+    out[app] = url ? String(url).replace(/\/+$/, "") : null;
+  }
+  return out;
+}
+
+/** Make a handoff link into another app for this signed-in person. */
+export async function createHandoff(userId: string, toApp: unknown, path: unknown): Promise<{ url: string } | { error: string }> {
+  if (!query) return { error: "Not available right now." };
+  if (!OPS_APPS.includes(toApp as OpsApp) || toApp === thisApp) return { error: "Unknown app." };
+  const base = (await appUrls())[toApp as OpsApp];
+  if (!base) return { error: "That app's address isn't known yet." };
+  const token = randomBytes(32).toString("base64url");
+  const target = safePath(path);
+  await query(`delete from ops.handoffs where expires_at < now() - interval '1 hour'`).catch(() => {});
+  await query(`insert into ops.handoffs (token_hash, user_id, to_app, path, expires_at) values ($1, $2, $3, $4, now() + make_interval(secs => $5))`,
+    [sha256(token), userId, toApp, target, HANDOFF_SECONDS]);
+  return { url: `${base}/api/handoff/redeem?token=${encodeURIComponent(token)}&to=${encodeURIComponent(target)}` };
+}
+
+/** Use a handoff token arriving at this app: who it's for and where to go, once. */
+export async function redeemHandoff(token: unknown): Promise<{ userId: string; path: string } | null> {
+  if (!query || typeof token !== "string" || token.length < 20 || token.length > 100) return null;
+  const [row] = await query(
+    `update ops.handoffs set used_at = now() where token_hash = $1 and to_app = $2 and used_at is null and expires_at > now() returning user_id, path`,
+    [sha256(token), thisApp],
+  );
+  return row ? { userId: String(row.user_id), path: safePath(row.path) } : null;
 }

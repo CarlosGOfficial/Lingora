@@ -130,6 +130,19 @@ async function afterAuth(acct: Account, adoptServerPrefs: boolean) {
   await syncNow()
 }
 
+/**
+ * Signed in on the server but not on this device yet (for example, arrived from Banter or
+ * Wordle Unlimited through a sign-in link): use that session.
+ */
+export async function adoptServerSession() {
+  if (useStore.getState().account) return
+  try {
+    await afterAuth(await api.me(), true)
+  } catch {
+    /* not signed in: the website shows the sign-in page as usual */
+  }
+}
+
 export async function signUp(username: string, password: string) {
   await afterAuth(await api.signup({ username, password }), false)
 }
