@@ -1,0 +1,39 @@
+# Tests, typecheck and build on every push. The coin wallet tests (server/economy.test.ts)
+# run against a throwaway Postgres here.
+name: CI
+on:
+  push:
+  workflow_dispatch:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: lingora
+          POSTGRES_PASSWORD: lingora
+          POSTGRES_DB: lingora_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U lingora"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Tests
+        run: npm test
+        env:
+          TEST_DATABASE_URL: postgresql://lingora:lingora@localhost:5432/lingora_test
+      - name: Typecheck and build
+        run: npm run build
