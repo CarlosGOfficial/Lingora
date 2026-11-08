@@ -53,6 +53,16 @@ export const api = {
   requestFriend: (username: string) => request<{ status: 'pending' | 'accepted'; name: string }>('/friends/request', { body: { username } }),
   respondRequest: (requestId: number, action: 'accept' | 'decline' | 'cancel') =>
     request<{ ok: boolean }>(`/friends/requests/${requestId}/${action}`, { method: 'POST' }),
+  // Live duels (server/duels.ts).
+  duels: () => request<any>('/duels'),
+  duel: (id: number) => request<any>(`/duels/${id}`),
+  duelLadder: (lang: LangCode) => request<any[]>(`/duels/ladder/${lang}`),
+  challengeDuel: (friendId: string, lang: LangCode, tier: string) => request<{ id: number }>('/duels', { body: { friendId, lang, tier } }),
+  acceptDuel: (id: number) => request<any>(`/duels/${id}/accept`, { method: 'POST' }),
+  declineDuel: (id: number) => request<{ ok: true }>(`/duels/${id}/decline`, { method: 'POST' }),
+  duelQueue: (lang: LangCode) => request<{ id?: number; waiting?: true }>('/duels/queue', { body: { lang } }),
+  leaveDuelQueue: () => request<{ ok: true }>('/duels/queue', { method: 'DELETE' }),
+  answerDuel: (id: number, index: number, optionId: string) => request<{ correct: boolean; answer: string; view: any }>(`/duels/${id}/answer`, { body: { index, optionId } }),
   hubInbox: () => request<{ items: any[]; unread: number }>('/hub/inbox'),
   hubRead: (ids?: number[]) => request<{ ok: boolean }>('/hub/read', { body: ids ? { ids } : {} }),
   hubFeed: () => request<any[]>('/hub/feed'),

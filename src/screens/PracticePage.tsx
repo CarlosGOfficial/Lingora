@@ -49,6 +49,13 @@ export function PracticePage() {
             <span className="muted small">Role-play real situations by typing or speaking, using only what you’ve learned.</span>
           </Link>
         )}
+        <Link to="/duels" className="mode-card" data-testid="duels-card">
+          <span className="mode-icon">
+            <Icon name="bolt" size={24} />
+          </span>
+          <strong>Duels</strong>
+          <span className="muted small">Race a friend or another learner through 10 quick questions. Ranked ladder, coins for playing.</span>
+        </Link>
         <Link to="/mistakes" className="mode-card" data-testid="mistakes-card">
           <span className="mode-icon">
             <Icon name="flag" size={24} />

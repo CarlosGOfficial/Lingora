@@ -88,7 +88,7 @@ async function friendshipBetween(s: Sql, a: string, b: string) {
     where (requester_id = ${a} and addressee_id = ${b}) or (requester_id = ${b} and addressee_id = ${a})`
   return row as { id: number; requester_id: string; addressee_id: string; status: string } | undefined
 }
-const areFriends = async (s: Sql, a: string, b: string) => (await friendshipBetween(s, a, b))?.status === 'accepted'
+export const areFriends = async (s: Sql, a: string, b: string) => (await friendshipBetween(s, a, b))?.status === 'accepted'
 
 /** Weekly XP, streak and course for everyone in `ids` who has opened Lingora. */
 async function leaderboard(s: Sql, uid: string, ids: string[], today: string): Promise<LeaderboardRow[]> {
