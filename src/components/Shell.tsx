@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useWallet } from '../shop/useWallet'
 import { useFriendAlerts } from '../social/useFriends'
 import { ThemeMenu } from '../theme/ThemeMenu'
+import { HubBell } from './HubBell'
 import { APP_NAME } from '../config'
 import { COURSES, LANG_CODES } from '../content'
 import { dueCards, liveStreak, todayXp, useStore } from '../store/useStore'
@@ -80,6 +81,7 @@ export function Shell() {
             <Link to="/shop" className="topstat coin-stat" title="Coins — open the shop">
               <Icon name="coin" size={18} /> <span key={coins} className="bump">{coins.toLocaleString()}</span>
             </Link>
+            <HubBell />
             <ThemeMenu />
           </div>
         </header>

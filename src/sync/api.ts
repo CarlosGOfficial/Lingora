@@ -53,6 +53,11 @@ export const api = {
   requestFriend: (username: string) => request<{ status: 'pending' | 'accepted'; name: string }>('/friends/request', { body: { username } }),
   respondRequest: (requestId: number, action: 'accept' | 'decline' | 'cancel') =>
     request<{ ok: boolean }>(`/friends/requests/${requestId}/${action}`, { method: 'POST' }),
+  hubInbox: () => request<{ items: any[]; unread: number }>('/hub/inbox'),
+  hubRead: (ids?: number[]) => request<{ ok: boolean }>('/hub/read', { body: ids ? { ids } : {} }),
+  hubFeed: () => request<any[]>('/hub/feed'),
+  hubSharing: () => request<{ hidden: string[] }>('/hub/sharing'),
+  hubSetSharing: (hidden: string[]) => request<{ hidden: string[] }>('/hub/sharing', { method: 'PUT', body: { hidden } }),
   report: (body: { kind: string; userId?: string; messageId?: number; reason: string; note?: string }) => request<{ ok: boolean }>('/reports', { body }),
   block: (userId: string) => request<{ ok: boolean }>(`/blocks/${encodeURIComponent(userId)}`, { method: 'PUT' }),
   unblock: (userId: string) => request<{ ok: boolean }>(`/blocks/${encodeURIComponent(userId)}`, { method: 'DELETE' }),

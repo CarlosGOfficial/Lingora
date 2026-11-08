@@ -1701,3 +1701,23 @@ input[type='range'] { accent-color: var(--accent); }
 .recall-weak .recall-bar { background: var(--danger, #dc2626); }
 .recall-pct { position: relative; display: block; text-align: center; font-size: .7rem; font-weight: 700; line-height: 16px; }
 @media (max-width: 480px) { .mistake-list li { flex-wrap: wrap; } .mistake-stats { flex-direction: row; align-items: center; width: 100%; justify-content: space-between; } }
+
+/* ---------- Activity hub (bell in the top bar) ---------- */
+.hub-bell { position: relative; }
+.hub-count { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; background: var(--danger, #dc2626); color: #fff; font-size: 10px; font-weight: 800; line-height: 18px; text-align: center; }
+.hub-menu { right: 0; width: min(380px, calc(100vw - 24px)); padding: 6px; z-index: 60; background: linear-gradient(var(--surface), var(--surface)), var(--bg); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); box-shadow: var(--shadow-lg); }
+.hub-tabs { gap: 4px; padding: 2px 2px 6px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.hub-list { max-height: 60vh; overflow-y: auto; padding-top: 4px; }
+.hub-row { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 12px; background: none; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.hub-row:hover { background: var(--accent-soft); }
+.hub-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; font-size: .9rem; }
+.hub-text.read { opacity: .7; }
+.hub-text.read strong { font-weight: 500; }
+.hub-empty { padding: 20px 12px; text-align: center; }
+.hub-sharing { padding: 8px; }
+.hub-toggle { gap: 8px; font-size: .9rem; }
+.hub-grid { display: inline-flex; flex-direction: column; gap: 1px; margin-top: 4px; }
+.hub-grid span { display: flex; gap: 1px; }
+.hub-grid i { width: 8px; height: 8px; border-radius: 1px; background: #787c7e; }
+.hub-grid i.t-G { background: #6aaa64; }
+.hub-grid i.t-Y { background: #c9b458; }

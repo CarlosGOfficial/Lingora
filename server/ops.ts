@@ -96,6 +96,33 @@ export const OPS_SCHEMA = [
     expires_at timestamptz not null,
     used_at timestamptz
   )`,
+  `create table if not exists ops.inbox (
+    id bigserial primary key,
+    user_id text not null references users(id) on delete cascade,
+    kind text not null,
+    title text not null,
+    body text not null default '',
+    url jsonb not null default '{}'::jsonb,
+    tag text,
+    count int not null default 1,
+    from_app text not null,
+    created_at timestamptz not null default now(),
+    read_at timestamptz
+  )`,
+  `create index if not exists ops_inbox_user_idx on ops.inbox(user_id, created_at desc)`,
+  `create index if not exists ops_inbox_tag_idx on ops.inbox(user_id, tag) where read_at is null and tag is not null`,
+  `create table if not exists ops.activity (
+    id bigserial primary key,
+    user_id text not null references users(id) on delete cascade,
+    kind text not null,
+    data jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now()
+  )`,
+  `create index if not exists ops_activity_user_idx on ops.activity(user_id, created_at desc)`,
+  `create table if not exists ops.activity_prefs (
+    user_id text primary key references users(id) on delete cascade,
+    hidden text[] not null default '{}'
+  )`,
   `create table if not exists ops.smoke_runs (
     id bigserial primary key,
     trigger text not null,
@@ -406,4 +433,117 @@ export async function redeemHandoff(token: unknown): Promise<{ userId: string; p
     [sha256(token), thisApp],
   );
   return row ? { userId: String(row.user_id), path: safePath(row.path) } : null;
+}
+
+/* ---------- Activity hub: one inbox, and what friends have been up to ---------- */
+
+/** What notify() sends (the same shape as PushEvent in server/push.ts). */
+export type InboxEvent = { kind: string; title: string; body: string; tag?: string; url: Partial<Record<OpsApp, string>> };
+const INBOX_KEEP_DAYS = 30;
+
+/**
+ * Save a notification to each person's inbox (called by notify() in server/push.ts, so every
+ * notification in any app lands here, with or without push set up). An unread one with the
+ * same tag is updated instead of repeated ("3 new messages from Sam").
+ */
+export async function recordInbox(userIds: string[], e: InboxEvent) {
+  if (!query || !userIds.length) return;
+  const url = JSON.stringify(e.url ?? {});
+  for (const uid of userIds) {
+    try {
+      if (e.tag) {
+        const merged = await query(
+          `update ops.inbox set title = $3, body = $4, url = $5::jsonb, count = count + 1, created_at = now(), from_app = $6
+           where id = (select id from ops.inbox where user_id = $1 and tag = $2 and read_at is null order by id desc limit 1) returning id`,
+          [uid, e.tag, e.title.slice(0, 200), e.body.slice(0, 500), url, thisApp],
+        );
+        if (merged.length) continue;
+      }
+      await query(`insert into ops.inbox (user_id, kind, title, body, url, tag, from_app) values ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
+        [uid, e.kind, e.title.slice(0, 200), e.body.slice(0, 500), url, e.tag ?? null, thisApp]);
+    } catch (err: any) {
+      original.warn("[ops] Inbox write failed:", err?.message);
+    }
+  }
+  if (Math.random() < 0.02) await query(`delete from ops.inbox where created_at < now() - make_interval(days => $1)`, [INBOX_KEEP_DAYS]).catch(() => {});
+}
+
+export type HubLink = { href: string; app: OpsApp; here: boolean };
+export type InboxItem = { id: number; kind: string; title: string; body: string; count: number; at: string; read: boolean; link: HubLink | null };
+
+/** Where an item opens: this app if it has a page for it, else the first app that does. */
+function linkFor(url: Partial<Record<OpsApp, string>>, urls: Record<OpsApp, string | null>): HubLink | null {
+  if (url[thisApp]) return { href: safePath(url[thisApp]), app: thisApp, here: true };
+  for (const app of OPS_APPS) {
+    const path = url[app];
+    if (path && urls[app]) return { href: `${urls[app]}${safePath(path)}`, app, here: false };
+  }
+  return null;
+}
+
+export async function inboxOf(userId: string, limit = 40): Promise<{ items: InboxItem[]; unread: number }> {
+  if (!query) return { items: [], unread: 0 };
+  const [rows, [{ n }], urls] = await Promise.all([
+    query(`select id, kind, title, body, url, count, created_at, read_at from ops.inbox where user_id = $1 order by created_at desc limit $2`, [userId, Math.min(100, limit)]),
+    query(`select count(*)::int as n from ops.inbox where user_id = $1 and read_at is null`, [userId]),
+    appUrls(),
+  ]);
+  return {
+    unread: n,
+    items: rows.map((r) => ({ id: Number(r.id), kind: r.kind, title: r.title, body: r.body, count: r.count, at: new Date(r.created_at).toISOString(), read: !!r.read_at, link: linkFor(r.url ?? {}, urls) })),
+  };
+}
+
+/** Mark some (or, with no ids, all) of my inbox read. */
+export async function markInboxRead(userId: string, ids?: unknown) {
+  if (!query) return;
+  const list = Array.isArray(ids) ? ids.map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 200) : null;
+  if (list && !list.length) return;
+  await query(`update ops.inbox set read_at = now() where user_id = $1 and read_at is null ${list ? "and id = any($2::bigint[])" : ""}`, list ? [userId, list] : [userId]);
+}
+
+/** Things friends can see, by kind. Everyone can hide any of them (activity_prefs.hidden). */
+export const ACTIVITY_KINDS = ["wordle.daily", "wordle.level", "wordle.streak", "wordle.clan", "lingora.lesson", "lingora.level"] as const;
+export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
+export type ActivityItem = { id: number; kind: ActivityKind; data: Record<string, unknown>; at: string; user: { id: string; name: string; avatar: string | null } };
+
+/** Record something a person did, for their friends' feeds (unless they hide that kind). */
+export async function recordActivity(userId: string, kind: ActivityKind, data: Record<string, unknown> = {}) {
+  if (!query || !ACTIVITY_KINDS.includes(kind)) return;
+  await query(`insert into ops.activity (user_id, kind, data) values ($1, $2, $3::jsonb)`, [userId, kind, JSON.stringify(data)])
+    .catch((err) => original.warn("[ops] Activity write failed:", err?.message));
+}
+
+/** Friends' recent activity (last 7 days), without what they hide or anyone blocked either way. */
+export async function activityFeed(userId: string): Promise<ActivityItem[]> {
+  if (!query) return [];
+  const rows = await query(
+    `with friends as (
+       select case when requester_id = $1 then addressee_id else requester_id end as id from friendships
+       where status = 'accepted' and (requester_id = $1 or addressee_id = $1))
+     select a.id, a.kind, a.data, a.created_at, u.id as user_id, u.username, u.first_name, u.profile_image_url
+     from ops.activity a join friends f on f.id = a.user_id join users u on u.id = a.user_id
+     left join ops.activity_prefs p on p.user_id = a.user_id
+     where a.created_at > now() - interval '7 days' and not (a.kind = any(coalesce(p.hidden, '{}')))
+     order by a.created_at desc limit 60`,
+    [userId],
+  ).catch(() => []);
+  return rows.map((r) => ({
+    id: Number(r.id), kind: r.kind, data: r.data ?? {}, at: new Date(r.created_at).toISOString(),
+    user: { id: r.user_id, name: r.username || r.first_name || "Player", avatar: r.profile_image_url ?? null },
+  }));
+}
+
+export async function activitySharing(userId: string): Promise<{ hidden: string[] }> {
+  if (!query) return { hidden: [] };
+  const [r] = await query(`select hidden from ops.activity_prefs where user_id = $1`, [userId]).catch(() => []);
+  return { hidden: r?.hidden ?? [] };
+}
+
+export async function setActivitySharing(userId: string, hidden: unknown) {
+  if (!query) return;
+  const list = (Array.isArray(hidden) ? hidden : []).filter((k): k is string => ACTIVITY_KINDS.includes(k as ActivityKind));
+  await query(`insert into ops.activity_prefs (user_id, hidden) values ($1, $2) on conflict (user_id) do update set hidden = $2`, [userId, list]);
+  // Hiding a kind also takes back what's already in friends' feeds.
+  if (list.length) await query(`delete from ops.activity where user_id = $1 and kind = any($2::text[])`, [userId, list]);
 }

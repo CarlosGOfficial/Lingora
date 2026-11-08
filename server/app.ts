@@ -1,3 +1,6 @@
+import { findLesson, findReading } from '../src/content'
+import { findStory } from '../src/content/stories'
+import { levelFromXp } from '../src/shop/catalog'
 import { Hono, type Context } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { HTTPException } from 'hono/http-exception'
@@ -12,7 +15,7 @@ import { USERNAME_RE, hashPassword, hashToken, newSessionToken, verifyPassword }
 import { chatEnabled, chatTurn, validateChat } from './chat'
 import { sql, type Sql } from './db'
 import { IS_PROD } from './env'
-import { appUrls, createHandoff, redeemHandoff, safePath, suspendedMessage, suspensionOf, withRoute } from './ops'
+import { recordActivity, appUrls, createHandoff, redeemHandoff, safePath, suspendedMessage, suspensionOf, withRoute } from './ops'
 import { FailureLimiter, SESSION_COOKIE, clientIp, currentUserId, db, fail, rateLimit, requireUser, str, type Env } from './http'
 import { registerPushRoutes } from './push'
 import { registerSocialRoutes } from './social'
@@ -35,6 +38,11 @@ app.onError((err, c) => {
   console.error(err)
   return c.json({ error: 'Something went wrong on the server.' }, 500)
 })
+
+/** A lesson's, reader's or story's title (for friends' activity feeds). */
+function titleOf(_lang: string, refId: string): string {
+  return findLesson(refId)?.lesson.title ?? findReading(refId)?.reading.title ?? findStory(refId)?.title ?? refId
+}
 
 /* ---------- Sessions ---------- */
 async function startSession(c: Context, userId: string) {
@@ -190,6 +198,11 @@ app.post('/sync', requireUser, async (c) => {
       select ${uid}, * from unnest(${xp.map((e) => e.id)}::text[], ${xp.map((e) => e.lang)}::text[],
         ${xp.map((e) => e.xp)}::int[], ${xp.map((e) => e.day)}::date[], ${xp.map((e) => e.at)}::bigint[])
       on conflict do nothing`)
+  // Which completions are new (for friends' activity), and the level before this sync.
+  const knownRefs = completions.length
+    ? new Set((await s`select ref_id from lingora_completions where user_id = ${uid} and ref_id = any(${completions.map((e) => e.refId)}::text[])`).map((r) => r.ref_id as string))
+    : new Set<string>()
+  const [{ xp: xpBefore }] = await s`select coalesce(sum(xp), 0)::int as xp from lingora_xp_events where user_id = ${uid}`
   if (completions.length)
     writes.push(s`insert into lingora_completions (user_id, ref_id, lang, kind, at_ms)
       select ${uid}, * from unnest(${completions.map((e) => e.refId)}::text[], ${completions.map((e) => e.lang)}::text[],
@@ -209,6 +222,13 @@ app.post('/sync', requireUser, async (c) => {
   if (body.prefs && typeof body.prefs === 'object' && JSON.stringify(body.prefs).length < 20_000)
     writes.push(s`update lingora_profiles set prefs = ${JSON.stringify(body.prefs)}::jsonb where user_id = ${uid}`)
   if (writes.length) await s.transaction(writes)
+
+  // Friends' activity (server/ops.ts): finished lessons, stories and readers (at most 3 a sync), and level-ups.
+  for (const e of completions.filter((x) => !knownRefs.has(x.refId)).slice(-3)) {
+    void recordActivity(uid, 'lingora.lesson', { lang: e.lang, kind: e.kind, title: titleOf(e.lang, e.refId) })
+  }
+  const [{ xp: xpAfter }] = await s`select coalesce(sum(xp), 0)::int as xp from lingora_xp_events where user_id = ${uid}`
+  if (levelFromXp(xpAfter) > levelFromXp(xpBefore)) void recordActivity(uid, 'lingora.level', { level: levelFromXp(xpAfter) })
 
   // Coins live in the shared wallet (users.coins, Wordle's). Pay what's new, then charge
   // purchases in time order, only while the wallet covers them (rejected ones vanish on sync).

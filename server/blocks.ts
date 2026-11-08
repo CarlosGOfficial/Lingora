@@ -1,7 +1,7 @@
 import type { Hono } from 'hono'
 import type { Sql } from './db'
 import { db, fail, requireUser, type Env } from './http'
-import { activeAnnouncements, fileReport } from './ops'
+import { activeAnnouncements, activityFeed, activitySharing, fileReport, inboxOf, markInboxRead, setActivitySharing } from './ops'
 
 /*
  * Blocking, shared with Banter and Wordle Unlimited: the same `chat.blocks` rows (Banter
@@ -33,6 +33,19 @@ export async function blockedByMe(s: Sql, me: string | null | undefined, them: s
 export const BLOCKED_MESSAGE = 'You can’t do that with this person.'
 
 export function registerBlockRoutes(app: Hono<Env>) {
+  // The activity hub (server/ops.ts): one inbox for all three apps, and friends' activity.
+  app.get('/hub/inbox', requireUser, async (c) => c.json(await inboxOf(c.get('userId'))))
+  app.post('/hub/read', requireUser, async (c) => {
+    await markInboxRead(c.get('userId'), (await c.req.json().catch(() => ({}))).ids)
+    return c.json({ ok: true })
+  })
+  app.get('/hub/feed', requireUser, async (c) => c.json(await activityFeed(c.get('userId'))))
+  app.get('/hub/sharing', requireUser, async (c) => c.json(await activitySharing(c.get('userId'))))
+  app.put('/hub/sharing', requireUser, async (c) => {
+    await setActivitySharing(c.get('userId'), (await c.req.json().catch(() => ({}))).hidden)
+    return c.json(await activitySharing(c.get('userId')))
+  })
+
   // Announcements from the admin dashboard showing in Lingora right now (public).
   app.get('/ops/announcements', async (c) => c.json(await activeAnnouncements()))
 

@@ -1,3 +1,4 @@
+import { recordInbox } from './ops'
 import './env'
 import type { Hono } from 'hono'
 import webpush from 'web-push'
@@ -84,6 +85,8 @@ const TARGETS = `select * from push.subscriptions s where s.user_id = any($1::te
 /** Sends `event` to these people (never throws; it's fire-and-forget). */
 export function notify(userIds: Iterable<string>, event: PushEvent) {
   const ids = Array.from(new Set(userIds));
+  // Every notification also goes to the shared inbox (the activity hub, server/ops.ts).
+  void recordInbox(ids, event)
   if (!pushEnabled || !ids.length) return;
   void (async () => {
     const db = sql
