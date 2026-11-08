@@ -49,6 +49,13 @@ export function PracticePage() {
             <span className="muted small">Role-play real situations by typing or speaking, using only what you’ve learned.</span>
           </Link>
         )}
+        <Link to="/mistakes" className="mode-card" data-testid="mistakes-card">
+          <span className="mode-icon">
+            <Icon name="flag" size={24} />
+          </span>
+          <strong>Mistakes notebook</strong>
+          <span className="muted small">The words you’ve forgotten most. See them, then drill them.</span>
+        </Link>
         {MODES.map((m) => {
           if (m.mode === 'writing' && course.lang === 'pt') return null
           const ok = enough && (m.mode !== 'listening' || voice)

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { CompleteScreen } from '../components/CompleteScreen'
 import { SessionRunner, type SessionSummary } from '../components/SessionRunner'
 import { COURSES, getItem } from '../content'
@@ -12,6 +12,7 @@ const MODES: PracticeMode[] = ['speaking', 'listening', 'weak', 'writing']
 
 export function PracticeSession() {
   const { mode = '' } = useParams()
+  const [search] = useSearchParams()
   const navigate = useNavigate()
   const { activeLang, progress, recordSession, streak } = useStore()
   const course = COURSES[activeLang]
@@ -20,9 +21,10 @@ export function PracticeSession() {
     const opts = effectiveOpts({ listening: true, speaking: true }, course)
     if (mode === 'listening' && !opts.listening) return []
     if (mode === 'writing' && course.lang === 'pt') return []
-    const items = Object.values(progress[activeLang].cards)
-      .sort((a, b) => a.stability - b.stability)
-      .map((c) => getItem(c.itemId))
+    // From the mistakes notebook: exactly these items (ones you've studied), in this order.
+    const chosen = mode === 'weak' ? (search.get('items') ?? '').split(',').filter((id) => progress[activeLang].cards[id]).slice(0, 20) : []
+    const items = (chosen.length >= 4 ? chosen : Object.values(progress[activeLang].cards).sort((a, b) => a.stability - b.stability).map((c) => c.itemId))
+      .map((id) => getItem(id))
       .filter((x): x is Item => !!x)
     return items.length >= 4 ? buildPractice(mode as PracticeMode, items, course, opts) : []
   })
@@ -47,9 +49,9 @@ export function PracticeSession() {
         accuracy={done.accuracy}
         durationMs={done.durationMs}
         streakBefore={done.streakBefore}
-        onContinue={() => navigate('/practice')}
+        onContinue={() => navigate(search.get('items') ? '/mistakes' : '/practice')}
       />
     )
   }
-  return <SessionRunner exercises={exercises} course={course} onFinish={finish} onExit={() => navigate('/practice')} />
+  return <SessionRunner exercises={exercises} course={course} onFinish={finish} onExit={() => navigate(search.get('items') ? '/mistakes' : '/practice')} />
 }
