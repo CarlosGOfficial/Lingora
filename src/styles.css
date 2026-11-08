@@ -1775,3 +1775,12 @@ input[type='range'] { accent-color: var(--accent); }
 .study-ring span { font-family: var(--font-display); font-weight: 800; font-size: 1.3rem; font-variant-numeric: tabular-nums; }
 @media (max-width: 560px) { .duel-hero { flex-direction: column; align-items: stretch; } }
 .seg button { white-space: nowrap; }
+
+/* Cross-app events (components/CrossEvents.tsx) */
+.cross-event { padding: 16px; border-radius: 18px; border: 2px dashed color-mix(in srgb, var(--accent) 55%, transparent); background: linear-gradient(120deg, var(--success-bg), var(--accent-soft)); display: flex; flex-direction: column; gap: 10px; }
+.cross-emoji { font-size: 2.2rem; }
+.cross-kicker { display: block; font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); }
+.cross-name { display: block; font-family: var(--font-display); font-size: 1.2rem; }
+.cross-goals { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.cross-bar { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin-top: 4px; }
+.cross-bar span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }

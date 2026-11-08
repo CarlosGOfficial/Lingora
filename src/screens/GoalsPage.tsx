@@ -1,3 +1,4 @@
+import { CrossEvents } from '../components/CrossEvents'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon'
@@ -32,6 +33,7 @@ export function GoalsPage() {
   return (
     <div className="stack" data-testid="goals-page">
       <PageHeader icon="target" title="Goals" subtitle="Quests, your weekly league, XP challenges and badges. Every reward goes into the coins you share with Wordle Unlimited." />
+      <CrossEvents />
       {msg && <div className="cta-card calm" role="status" onClick={() => setMsg(null)}>{msg}</div>}
 
       <section className="card">

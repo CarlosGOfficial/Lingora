@@ -496,6 +496,106 @@ export async function redeemGameTicket(token: unknown, gameId: string): Promise<
   return row ? String(row.user_id) : null;
 }
 
+/* ---------- Cross-app events ---------- */
+
+/*
+ * A themed week across the apps (ops.events with kind 'cross', made on Wordle's admin
+ * dashboard): goals like "win 5 Wordles + finish 3 Lingora lessons + send 50 messages".
+ * Progress is counted live from what each app already records, between the event's start
+ * and end; the reward (coins and maybe an item) is claimed once, in one statement.
+ */
+export const CROSS_METRICS = {
+  wordle_wins: { app: "wordle", label: "Win Wordle rounds" },
+  wordle_daily: { app: "wordle", label: "Play the Wordle Daily" },
+  lingora_lessons: { app: "lingora", label: "Finish Lingora lessons, stories or readers" },
+  lingora_xp: { app: "lingora", label: "Earn Lingora XP" },
+  lingora_reviews: { app: "lingora", label: "Review Lingora cards" },
+  messages: { app: "banter", label: "Send chat messages (any app)" },
+} as const;
+export type CrossMetric = keyof typeof CROSS_METRICS;
+export type CrossEvent = {
+  id: number; name: string; emoji: string; description: string; startsAt: string; endsAt: string; live: boolean;
+  goals: { metric: CrossMetric; label: string; app: OpsApp; target: number; done: number }[];
+  reward: { coins: number; itemId: string | null; itemName: string | null };
+  complete: boolean; claimed: boolean;
+};
+const CLAIM_DAYS = 7; // after the end, there's this long to claim
+
+async function metricValue(metric: CrossMetric, userId: string, from: Date, to: Date): Promise<number> {
+  if (!query) return 0;
+  const ms = [from.getTime(), to.getTime()];
+  const t = [from.toISOString(), to.toISOString()];
+  const sqlFor: Record<CrossMetric, [string, unknown[]]> = {
+    wordle_wins: [`select count(*)::int as n from round_stats where user_id = $1 and won and created_at >= ($2::timestamptz at time zone 'UTC') and created_at < ($3::timestamptz at time zone 'UTC')`, [userId, ...t]],
+    wordle_daily: [`select count(*)::int as n from daily_results where user_id = $1 and finished and finished_at >= ($2::timestamptz at time zone 'UTC') and finished_at < ($3::timestamptz at time zone 'UTC')`, [userId, ...t]],
+    lingora_lessons: [`select count(*)::int as n from lingora_completions where user_id = $1 and at_ms >= $2 and at_ms < $3`, [userId, ...ms]],
+    lingora_xp: [`select coalesce(sum(xp), 0)::int as n from lingora_xp_events where user_id = $1 and at_ms >= $2 and at_ms < $3`, [userId, ...ms]],
+    lingora_reviews: [`select count(*)::int as n from lingora_review_logs where user_id = $1 and at_ms >= $2 and at_ms < $3`, [userId, ...ms]],
+    messages: [`select (
+        (select count(*) from direct_messages where from_user_id = $1 and deleted_at is null and created_at >= ($2::timestamptz at time zone 'UTC') and created_at < ($3::timestamptz at time zone 'UTC'))
+      + (select count(*) from group_messages where from_user_id = $1 and deleted_at is null and created_at >= ($2::timestamptz at time zone 'UTC') and created_at < ($3::timestamptz at time zone 'UTC'))
+      + (select count(*) from chat.messages where from_user_id = $1 and deleted_at is null and created_at >= ($2::timestamptz at time zone 'UTC') and created_at < ($3::timestamptz at time zone 'UTC'))
+    )::int as n`, [userId, ...t]],
+  };
+  const [text, params] = sqlFor[metric];
+  const [row] = await query(text, params).catch(() => [{ n: 0 }]);
+  return Number(row?.n ?? 0);
+}
+
+/** Live and upcoming (7 days) cross-app events, and recently ended ones you can still claim. */
+export async function crossEvents(userId: string): Promise<CrossEvent[]> {
+  if (!query) return [];
+  const rows = await query(
+    `select e.*, coalesce(p.tiers_paid, 0) as paid from ops.events e left join ops.event_progress p on p.event_id = e.id and p.user_id = $1
+     where e.kind = 'cross' and not e.cancelled and e.starts_at < now() + interval '7 days' and e.ends_at > now() - make_interval(days => $2)
+     order by e.starts_at limit 10`, [userId, CLAIM_DAYS]).catch(() => []);
+  const out: CrossEvent[] = [];
+  for (const e of rows) {
+    const from = new Date(e.starts_at), to = new Date(e.ends_at), started = from.getTime() <= Date.now();
+    const goals = [];
+    for (const g of (e.goals ?? []) as { metric: CrossMetric; target: number }[]) {
+      if (!CROSS_METRICS[g.metric]) continue;
+      goals.push({ metric: g.metric, label: CROSS_METRICS[g.metric].label, app: CROSS_METRICS[g.metric].app as OpsApp, target: g.target, done: started ? Math.min(g.target, await metricValue(g.metric, userId, from, to)) : 0 });
+    }
+    const reward = ((e.tiers ?? [])[0] ?? {}) as { coins?: number; itemId?: string | null; itemName?: string | null };
+    const live = started && to.getTime() > Date.now();
+    // Ended and nothing to claim: leave it out.
+    if (!live && started && Number(e.paid) > 0) continue;
+    out.push({
+      id: e.id, name: e.name, emoji: e.emoji, description: e.description, startsAt: from.toISOString(), endsAt: to.toISOString(), live,
+      goals, reward: { coins: reward.coins ?? 0, itemId: reward.itemId ?? null, itemName: reward.itemName ?? null },
+      complete: started && goals.length > 0 && goals.every((g) => g.done >= g.target), claimed: Number(e.paid) > 0,
+    });
+  }
+  return out.filter((e) => e.live || !e.claimed && e.complete || new Date(e.startsAt).getTime() > Date.now());
+}
+
+/** Claim a finished event's reward (once). */
+export async function claimCrossEvent(userId: string, eventId: number): Promise<{ coins: number; item: string | null } | { error: string }> {
+  if (!query) return { error: "Not available right now." };
+  const e = (await crossEvents(userId)).find((x) => x.id === eventId);
+  if (!e) return { error: "That event isn't on." };
+  if (e.claimed) return { error: "Already claimed." };
+  if (!e.complete) return { error: "Finish every goal first." };
+  const [row] = await query(
+    `select tiers->0->>'itemType' as itemtype from ops.events where id = $1`, [eventId]).catch(() => [null]);
+  const [r] = await query(
+    `with claimed as (
+       insert into ops.event_progress (event_id, user_id, tiers_paid) values ($1, $2, 1)
+       on conflict (event_id, user_id) do update set tiers_paid = 1, updated_at = now() where ops.event_progress.tiers_paid = 0
+       returning 1
+     ), coins as (
+       update users set coins = coins + $3 where id = $2 and exists (select 1 from claimed) and $3::int > 0 returning 1
+     ), item as (
+       insert into inventory (user_id, item_id, item_type) select $2, $4, $5 where exists (select 1 from claimed) and $4::text is not null
+       on conflict do nothing returning 1
+     )
+     select exists (select 1 from claimed) as ok`,
+    [eventId, userId, e.reward.coins, e.reward.itemId, row?.itemtype ?? "title"]);
+  if (!r?.ok) return { error: "Already claimed." };
+  return { coins: e.reward.coins, item: e.reward.itemName };
+}
+
 /* ---------- Activity hub: one inbox, and what friends have been up to ---------- */
 
 /** What notify() sends (the same shape as PushEvent in server/push.ts). */

@@ -22,6 +22,7 @@ import { registerSocialRoutes } from './social'
 import { registerBlockRoutes } from './blocks'
 import { registerDuelRoutes } from './duels'
 import { registerStudyRoutes } from './study'
+import { registerCrossEventRoutes } from './crossEvents'
 import { registerBanterRoutes } from './banter'
 import { checkAchievements, registerGoalRoutes } from './goals'
 
@@ -302,6 +303,7 @@ registerSocialRoutes(app)
 registerBlockRoutes(app)
 registerDuelRoutes(app)
 registerStudyRoutes(app)
+registerCrossEventRoutes(app)
 registerBanterRoutes(app)
 registerGoalRoutes(app)
 registerPushRoutes(app)
