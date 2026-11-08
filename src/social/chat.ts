@@ -24,7 +24,16 @@ export const GIPHY_ID_RE = /^[A-Za-z0-9]{4,64}$/
 // Typed text that starts with one of these gets a leading space, so only real cards render.
 // (VOICE:, POLL:, FILE: and STICKER: come from Banter: a voice message, a poll you vote on in
 // Banter, a file to download and a server sticker.)
-const CARD_RE = /^(INVITE|PARTY|CLIP|IMG|GIF|VOICE|POLL|FILE|STICKER|DAILY):/
+/**
+ * A Wordle Unlimited friend challenge: CHALLENGE:<id> (play it), or the result someone sends
+ * back, CHALLENGE:<id>:<guesses or X>:<rows of G/Y/X joined by '/'>.
+ */
+export function challengeCard(content: string): { id: string; result: { score: string; rows: string[] } | null } | null {
+  const m = /^CHALLENGE:([A-Za-z0-9]{10})(?::([1-6X]):([GYX/]{5,41}))?$/.exec(content)
+  if (!m) return null
+  return { id: m[1], result: m[2] ? { score: m[2], rows: m[3].split('/').filter((r) => /^[GYX]{5}$/.test(r)) } : null }
+}
+const CARD_RE = /^(INVITE|PARTY|CLIP|IMG|GIF|VOICE|POLL|FILE|STICKER|DAILY|CHALLENGE):/
 /** A Wordle Daily Challenge result: DAILY:<n>:<score>:<rows of G/Y/X joined by "/">. */
 export function dailyResult(content: string): { number: number; score: string; rows: string[] } | null {
   const m = /^DAILY:(\d{1,5}):([1-6X]):([GYX/]{5,41})$/.exec(content)
@@ -77,6 +86,8 @@ export function messagePreview(content: string): string {
   if (file) return `📎 ${file.name}`
   const daily = dailyResult(content)
   if (daily) return `📅 Wordle Daily #${daily.number} ${daily.score}/6`
+  const challenge = challengeCard(content)
+  if (challenge) return challenge.result ? `🧩 Wordle challenge ${challenge.result.score}/6` : '🧩 A Wordle word challenge'
   const st = sticker(content)
   if (st) return `🖼️ ${st.name}`
   const clip = sharedClip(content)

@@ -11,6 +11,7 @@ import {
   voiceNote,
   sharedFile,
   sticker,
+  challengeCard,
   dailyResult,
   fileSize,
   inviteCode,
@@ -172,6 +173,15 @@ export function MessageBody({ content, mine, sender, me, onMediaLoad }: { conten
         <span><strong>{file.name}</strong><small>{fileSize(file.bytes)} · Download</small></span>
       </a>
     )
+  }
+  const challenge = challengeCard(content)
+  if (challenge) {
+    const href = links?.wordleUrl ? `${links.wordleUrl}/challenge/${challenge.id}` : undefined
+    if (challenge.result) {
+      const rows = challenge.result.rows.map((r) => r.split('').map((c) => (c === 'G' ? '🟩' : c === 'Y' ? '🟨' : '⬛')).join('')).join('\n')
+      return <WordleCard icon="🧩" title={`Wordle challenge · ${challenge.result.score}/6`} text={rows} href={href} action="See how everyone did" />
+    }
+    return <WordleCard icon="🧩" title="A Wordle word challenge" text={`${mine ? 'You' : sender} set a word to guess.`} href={href} action="Guess it in Wordle" />
   }
   const daily = dailyResult(content)
   if (daily) {
