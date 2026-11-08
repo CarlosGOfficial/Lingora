@@ -96,6 +96,26 @@ export const OPS_SCHEMA = [
     expires_at timestamptz not null,
     used_at timestamptz
   )`,
+  // Season pass (made on Wordle's admin dashboard, shown in all three apps).
+  `create table if not exists ops.seasons (
+    id serial primary key,
+    name text not null,
+    starts_at timestamptz not null,
+    ends_at timestamptz not null,
+    premium_price integer not null default 1500,
+    tiers jsonb not null default '[]'::jsonb,
+    created_by text,
+    created_at timestamptz not null default now()
+  )`,
+  `create table if not exists ops.season_pass (
+    season_id integer not null references ops.seasons(id) on delete cascade,
+    user_id text not null references users(id) on delete cascade,
+    premium boolean not null default false,
+    claimed_free integer[] not null default '{}',
+    claimed_premium integer[] not null default '{}',
+    bought_at timestamptz,
+    primary key (season_id, user_id)
+  )`,
   // Games in Banter calls: Banter writes the game, Wordle makes its room on first open.
   `create table if not exists ops.call_games (
     id text primary key,
@@ -594,6 +614,113 @@ export async function claimCrossEvent(userId: string, eventId: number): Promise<
     [eventId, userId, e.reward.coins, e.reward.itemId, row?.itemtype ?? "title"]);
   if (!r?.ok) return { error: "Already claimed." };
   return { coins: e.reward.coins, item: e.reward.itemName };
+}
+
+/* ---------- Season pass ---------- */
+
+/*
+ * One season at a time (about 8 weeks, 50 tiers of SEASON_TIER_XP). Season XP comes from all
+ * three apps, counted live from what they already record, at most SEASON_DAY_CAP a day (UTC):
+ *   Wordle: 20 a round won, 30 a Daily finished · Lingora: its own XP · Chat: 2 a message
+ *   (any app, at most 60 a day). Each tier has a free reward and a premium one; premium is
+ * unlocked with coins from the shared wallet. Every claim and the purchase are one statement.
+ */
+export const SEASON_TIER_XP = 300;
+export const SEASON_TIERS = 50;
+export const SEASON_DAY_CAP = 400;
+export type SeasonReward = { coins: number; itemId: string | null; itemName: string | null; itemType: string | null };
+export type SeasonView = {
+  id: number; name: string; startsAt: string; endsAt: string; premiumPrice: number;
+  xp: number; today: number; tier: number; tiers: { free: SeasonReward; premium: SeasonReward }[];
+  premium: boolean; claimedFree: number[]; claimedPremium: number[];
+  rules: { tierXp: number; dayCap: number };
+};
+
+async function currentSeason(): Promise<any | null> {
+  if (!query) return null;
+  const [s] = await query(`select * from ops.seasons where starts_at <= now() and ends_at > now() - interval '3 days' order by starts_at desc limit 1`).catch(() => []);
+  return s ?? null;
+}
+
+/** Season XP: per UTC day, everything earned that day, capped. */
+async function seasonXp(userId: string, from: Date, to: Date): Promise<{ total: number; today: number }> {
+  if (!query) return { total: 0, today: 0 };
+  const t = [from.toISOString(), to.toISOString()];
+  const [r] = await query(
+    `with d as (
+       select (created_at at time zone 'UTC')::date as day, 20 as xp from round_stats where user_id = $1 and won and created_at >= ($2::timestamptz at time zone 'UTC') and created_at < ($3::timestamptz at time zone 'UTC')
+       union all select (finished_at at time zone 'UTC')::date, 30 from daily_results where user_id = $1 and finished and finished_at >= ($2::timestamptz at time zone 'UTC') and finished_at < ($3::timestamptz at time zone 'UTC')
+       union all select (to_timestamp(at_ms / 1000.0) at time zone 'UTC')::date, xp from lingora_xp_events where user_id = $1 and at_ms >= $4 and at_ms < $5
+       union all select day, least(60, n * 2) from (
+         select (created_at at time zone 'UTC')::date as day, count(*)::int as n from (
+           select created_at from direct_messages where from_user_id = $1 and deleted_at is null and created_at >= ($2::timestamptz at time zone 'UTC') and created_at < ($3::timestamptz at time zone 'UTC')
+           union all select created_at from group_messages where from_user_id = $1 and deleted_at is null and created_at >= ($2::timestamptz at time zone 'UTC') and created_at < ($3::timestamptz at time zone 'UTC')
+           union all select created_at from chat.messages where from_user_id = $1 and deleted_at is null and created_at >= ($2::timestamptz at time zone 'UTC') and created_at < ($3::timestamptz at time zone 'UTC')
+         ) m group by 1
+       ) chat
+     ), days as (select day, least($6, sum(xp))::int as xp from d group by day)
+     select coalesce(sum(xp), 0)::int as total, coalesce(sum(xp) filter (where day = (now() at time zone 'UTC')::date), 0)::int as today from days`,
+    [userId, ...t, from.getTime(), to.getTime(), SEASON_DAY_CAP]).catch((err) => { original.warn("[ops] Season XP:", err?.message); return [{ total: 0, today: 0 }]; });
+  return { total: Number(r?.total ?? 0), today: Number(r?.today ?? 0) };
+}
+
+export async function seasonView(userId: string): Promise<SeasonView | null> {
+  const s = await currentSeason();
+  if (!s) return null;
+  const { total, today } = await seasonXp(userId, new Date(s.starts_at), new Date(s.ends_at));
+  const [p] = await query!(`select * from ops.season_pass where season_id = $1 and user_id = $2`, [s.id, userId]).catch(() => []);
+  return {
+    id: s.id, name: s.name, startsAt: new Date(s.starts_at).toISOString(), endsAt: new Date(s.ends_at).toISOString(), premiumPrice: s.premium_price,
+    xp: total, today, tier: Math.min(SEASON_TIERS, Math.floor(total / SEASON_TIER_XP)), tiers: s.tiers,
+    premium: !!p?.premium, claimedFree: p?.claimed_free ?? [], claimedPremium: p?.claimed_premium ?? [],
+    rules: { tierXp: SEASON_TIER_XP, dayCap: SEASON_DAY_CAP },
+  };
+}
+
+/** Claim tier n (1-based) on a track: once, only when reached, premium only with the pass. */
+export async function claimSeasonTier(userId: string, tier: number, track: "free" | "premium"): Promise<{ reward: SeasonReward } | { error: string }> {
+  const v = await seasonView(userId);
+  if (!v) return { error: "There's no season on right now." };
+  if (!Number.isInteger(tier) || tier < 1 || tier > SEASON_TIERS) return { error: "No such tier." };
+  if (tier > v.tier) return { error: "You haven't reached that tier yet." };
+  if (track === "premium" && !v.premium) return { error: "Unlock the premium track first." };
+  const reward = v.tiers[tier - 1]?.[track];
+  if (!reward) return { error: "No reward there." };
+  const col = track === "premium" ? "claimed_premium" : "claimed_free";
+  await query!(`insert into ops.season_pass (season_id, user_id) values ($1, $2) on conflict do nothing`, [v.id, userId]);
+  const [r] = await query!(
+    `with claimed as (
+       update ops.season_pass set ${col} = array_append(${col}, $3) where season_id = $1 and user_id = $2 and not ($3 = any(${col}))
+       ${track === "premium" ? "and premium" : ""} returning 1
+     ), coins as (
+       update users set coins = coins + $4 where id = $2 and exists (select 1 from claimed) and $4::int > 0 returning 1
+     ), item as (
+       insert into inventory (user_id, item_id, item_type) select $2, $5, $6 where exists (select 1 from claimed) and $5::text is not null
+       on conflict do nothing returning 1
+     )
+     select exists (select 1 from claimed) as ok`,
+    [v.id, userId, tier, reward.coins ?? 0, reward.itemId, reward.itemType ?? "title"]);
+  return r?.ok ? { reward } : { error: "Already claimed." };
+}
+
+/** Unlock the premium track with coins (once a season). */
+export async function buySeasonPremium(userId: string): Promise<{ ok: true } | { error: string }> {
+  const v = await seasonView(userId);
+  if (!v) return { error: "There's no season on right now." };
+  if (v.premium) return { error: "You already have it." };
+  if (new Date(v.endsAt).getTime() < Date.now()) return { error: "This season has ended." };
+  await query!(`insert into ops.season_pass (season_id, user_id) values ($1, $2) on conflict do nothing`, [v.id, userId]);
+  const [r] = await query!(
+    // The pass row is updated first: a second click waits on its lock, then sees it's premium already.
+    `with pass as (
+       update ops.season_pass set premium = true, bought_at = now() where season_id = $1 and user_id = $2 and not premium
+         and (select coins from users where id = $2) >= $3 returning 1
+     ), pay as (
+       update users set coins = coins - $3 where id = $2 and exists (select 1 from pass) returning 1
+     )
+     select exists (select 1 from pass) as ok`,
+    [v.id, userId, v.premiumPrice]);
+  return r?.ok ? { ok: true } : { error: `You need ${v.premiumPrice} coins.` };
 }
 
 /* ---------- Activity hub: one inbox, and what friends have been up to ---------- */
