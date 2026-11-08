@@ -96,6 +96,23 @@ export const OPS_SCHEMA = [
     expires_at timestamptz not null,
     used_at timestamptz
   )`,
+  // Games in Banter calls: Banter writes the game, Wordle makes its room on first open.
+  `create table if not exists ops.call_games (
+    id text primary key,
+    call_key text not null,
+    mode text not null default 'normal',
+    code text,
+    created_by text,
+    created_at timestamptz not null default now(),
+    ended_at timestamptz
+  )`,
+  `create table if not exists ops.game_tickets (
+    token_hash text primary key,
+    user_id text not null references users(id) on delete cascade,
+    game_id text not null references ops.call_games(id) on delete cascade,
+    expires_at timestamptz not null,
+    used_at timestamptz
+  )`,
   `create table if not exists ops.inbox (
     id bigserial primary key,
     user_id text not null references users(id) on delete cascade,
@@ -433,6 +450,50 @@ export async function redeemHandoff(token: unknown): Promise<{ userId: string; p
     [sha256(token), thisApp],
   );
   return row ? { userId: String(row.user_id), path: safePath(row.path) } : null;
+}
+
+/* ---------- Games in Banter calls ---------- */
+
+/*
+ * Starting a game in a Banter call writes ops.call_games (a random id). Each player gets a
+ * single-use ticket (5 minutes) for Wordle's /embed/game/<id> page, which trades it for a seat
+ * in the game's room as that account. The page lives in an iframe on Banter, where Wordle's
+ * own sign-in cookie isn't sent, so the ticket stands in for it.
+ */
+const TICKET_SECONDS = 300;
+export const CALL_GAME_MODES = ["normal", "blitz", "mystery"] as const;
+
+export async function createCallGame(callKey: string, mode: unknown, userId: string): Promise<string | null> {
+  if (!query) return null;
+  const id = randomBytes(12).toString("base64url");
+  const m = CALL_GAME_MODES.includes(mode as any) ? String(mode) : "normal";
+  await query(`update ops.call_games set ended_at = now() where call_key = $1 and ended_at is null`, [callKey]);
+  await query(`insert into ops.call_games (id, call_key, mode, created_by) values ($1, $2, $3, $4)`, [id, callKey, m, userId]);
+  return id;
+}
+
+/** A link into the game for this person (Banter calls it for people in the call). */
+export async function createGameTicket(userId: string, gameId: string): Promise<{ url: string } | { error: string }> {
+  if (!query) return { error: "Not available right now." };
+  const base = (await appUrls()).wordle;
+  if (!base) return { error: "Wordle's address isn't known yet." };
+  const [game] = await query(`select id from ops.call_games where id = $1 and ended_at is null`, [gameId]);
+  if (!game) return { error: "That game has ended." };
+  const token = randomBytes(32).toString("base64url");
+  await query(`delete from ops.game_tickets where expires_at < now() - interval '1 hour'`).catch(() => {});
+  await query(`insert into ops.game_tickets (token_hash, user_id, game_id, expires_at) values ($1, $2, $3, now() + make_interval(secs => $4))`,
+    [sha256(token), userId, gameId, TICKET_SECONDS]);
+  return { url: `${base}/embed/game/${encodeURIComponent(gameId)}#t=${token}` };
+}
+
+/** Use a ticket (Wordle): who it's for, once, for this game only. */
+export async function redeemGameTicket(token: unknown, gameId: string): Promise<string | null> {
+  if (!query || typeof token !== "string" || token.length < 20 || token.length > 100) return null;
+  const [row] = await query(
+    `update ops.game_tickets set used_at = now() where token_hash = $1 and game_id = $2 and used_at is null and expires_at > now() returning user_id`,
+    [sha256(token), gameId],
+  );
+  return row ? String(row.user_id) : null;
 }
 
 /* ---------- Activity hub: one inbox, and what friends have been up to ---------- */
