@@ -30,12 +30,14 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
+    "@types/pg": "^8.11.10",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^4.3.2",
     "hanzi-writer-data": "^2.0.1",
     "hanzi-writer-data-jp": "^0.0.2",
+    "pg": "^8.16.3",
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
     "vitest": "^2.1.4"

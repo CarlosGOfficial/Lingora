@@ -3,7 +3,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { HTTPException } from 'hono/http-exception'
 import type { LangCode } from '../src/content/types'
 import { DAILY_REWARDS, SHOP_ITEM_BY_ID, dailyReward, dayNumber, dealPrice } from '../src/shop/catalog'
-import { chargePurchase, settleCoins, walletOf } from './economy'
+import { buy, settleCoins, walletOf } from './economy'
 import type { Account, Outbox, Prefs, SavedTheme, Snapshot, SyncRequest } from '../src/sync/types'
 import { MAX_SAVED_THEMES, isCustomTheme } from '../src/theme/themes'
 import Anthropic from '@anthropic-ai/sdk'
@@ -185,9 +185,7 @@ app.post('/sync', requireUser, async (c) => {
   if (purchases.length) {
     const known = new Set((await s`select client_id from lingora_purchases where user_id = ${uid}`).map((r) => r.client_id))
     for (const p of [...purchases].sort((x, y) => x.at - y.at)) {
-      if (known.has(p.id) || !(await chargePurchase(uid, p.id, p.price))) continue
-      await s`insert into lingora_purchases (user_id, client_id, item_id, price, at_ms)
-        values (${uid}, ${p.id}, ${p.itemId}, ${p.price}, ${p.at}) on conflict do nothing`
+      if (!known.has(p.id)) await buy(uid, p)
     }
   }
 

@@ -95,11 +95,12 @@ async function statsFor(uid: string, today: string): Promise<GoalStats> {
 export async function checkAchievements(uid: string, today: string) {
   const stats = await statsFor(uid, today)
   const s = db()
-  const have = new Set((await s`select achievement_id from lingora_achievements where user_id = ${uid}`).map((r) => r.achievement_id))
+  // Done means paid (a ledger row), so an unlock whose payment failed is paid on the next sync.
+  const paid = new Set((await s`select source_id from lingora_coin_ledger where user_id = ${uid} and source_id like 'ach:%'`).map((r) => r.source_id))
   for (const a of ACHIEVEMENTS) {
-    if (have.has(a.id) || !a.test(stats)) continue
-    const added = await s`insert into lingora_achievements (user_id, achievement_id) values (${uid}, ${a.id}) on conflict do nothing returning achievement_id`
-    if (added.length) await credit(uid, `ach:${a.id}`, a.coins)
+    if (paid.has(`ach:${a.id}`) || !a.test(stats)) continue
+    await s`insert into lingora_achievements (user_id, achievement_id) values (${uid}, ${a.id}) on conflict do nothing`
+    await credit(uid, `ach:${a.id}`, a.coins)
   }
   return stats
 }
@@ -134,20 +135,29 @@ async function weekXp(ids: string[], week: string): Promise<Map<string, number>>
 /** Close a finished week's league: places, moves and prizes (once). */
 async function finalize(leagueId: number) {
   const s = db()
-  const claimed = await s`update lingora_leagues set finalized = true where id = ${leagueId} and not finalized returning week, division`
-  if (!claimed.length) return
-  const { week, division } = claimed[0]
+  // Places and prizes are written first and are safe to redo (each prize is paid once per
+  // person and league), and the league is marked finished last. A run that fails half way
+  // is simply redone next time; only the run that marks it finished sends notifications.
+  const [league] = await s`select week, division from lingora_leagues where id = ${leagueId} and not finalized`
+  if (!league) return
+  const { week, division } = league
   const members = (await s`select user_id from lingora_league_members where league_id = ${leagueId}`).map((r) => r.user_id as string)
   const xp = await weekXp(members, week)
   const ranked = [...members].sort((a, b) => (xp.get(b) ?? 0) - (xp.get(a) ?? 0))
   const n = ranked.length
-  for (const [i, uid] of ranked.entries()) {
+  const results = ranked.map((uid, i) => {
     const up = i < LEAGUE_MOVES && division < DIVISIONS.length - 1 && (xp.get(uid) ?? 0) > 0
     const down = n > LEAGUE_MOVES * 2 && i >= n - LEAGUE_MOVES && division > 0
+    return { uid, i, up, down, prize: (LEAGUE_PRIZES[i] ?? 0) + (up ? 25 : 0) }
+  })
+  for (const { uid, i, up, down, prize } of results) {
     const moved = up ? 'up' : down ? 'down' : 'stay'
     await s`update lingora_league_members set place = ${i + 1}, moved = ${moved}, next_division = ${division + (up ? 1 : down ? -1 : 0)} where league_id = ${leagueId} and user_id = ${uid}`
-    const prize = (LEAGUE_PRIZES[i] ?? 0) + (up ? 25 : 0)
     if (prize && (xp.get(uid) ?? 0) > 0) await credit(uid, `league:${leagueId}`, prize)
+  }
+  const done = await s`update lingora_leagues set finalized = true where id = ${leagueId} and not finalized returning id`
+  if (!done.length) return
+  for (const { uid, i, up, down } of results) {
     notify([uid], {
       kind: 'lingora', tag: `league:${leagueId}`,
       title: up ? `Promoted to the ${DIVISIONS[division + 1]} league!` : down ? `Down to the ${DIVISIONS[division - 1]} league` : `You finished #${i + 1} in your league`,
@@ -193,13 +203,13 @@ async function settleChallenges(uid: string) {
   const s = db()
   const due = await s`select * from lingora_challenges where status = 'active' and ends_at <= now() and (from_id = ${uid} or to_id = ${uid})`
   for (const c of due) {
-    const claimed = await s`update lingora_challenges set status = 'done' where id = ${c.id} and status = 'active' returning id`
-    if (!claimed.length) continue
+    // Pay first (once per person and challenge, so redoing it is safe), mark it done last.
     const [a, b] = await Promise.all([xpBetween(c.from_id, c.started_at, c.ends_at), xpBetween(c.to_id, c.started_at, c.ends_at)])
     const winner = a > b ? c.from_id : b > a ? c.to_id : null
-    await s`update lingora_challenges set winner = ${winner} where id = ${c.id}`
     if (winner) await credit(winner, `chal:${c.id}`, CHALLENGE_PRIZE)
     else for (const p of [c.from_id, c.to_id]) await credit(p, `chal:${c.id}`, CHALLENGE_PRIZE / 2)
+    const claimed = await s`update lingora_challenges set status = 'done', winner = ${winner} where id = ${c.id} and status = 'active' returning id`
+    if (!claimed.length) continue
     notify([c.from_id, c.to_id], { kind: 'lingora', tag: `chal:${c.id}`, title: 'XP challenge over!', body: winner ? 'See who won and grab your coins.' : 'It’s a draw: you both get coins.', url: { lingora: '/goals' } })
   }
 }
@@ -272,9 +282,11 @@ export function registerGoalRoutes(app: Hono<Env>) {
     const q = (await questViews(uid, day, Number(body.tz) || 0)).find((x) => x.id === body.questId)
     if (!q) fail(404, 'That quest has ended.')
     if (q!.progress < q!.target) fail(400, 'Finish the quest first.')
-    const added = await db()`insert into lingora_quest_claims (user_id, day, quest_id) values (${uid}, ${day}, ${q!.id}) on conflict do nothing returning quest_id`
-    if (!added.length) fail(409, 'Already claimed.')
+    // Pay first (the ledger only pays a source once), then mark it claimed. If the
+    // payment fails, the quest stays claimable and the next try pays it.
     const coins = await credit(uid, `quest:${day}:${q!.id}`, q!.coins)
+    await db()`insert into lingora_quest_claims (user_id, day, quest_id) values (${uid}, ${day}, ${q!.id}) on conflict do nothing`
+    if (!coins) fail(409, 'Already claimed.')
     return c.json({ coins })
   })
 

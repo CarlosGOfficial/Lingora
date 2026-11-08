@@ -38,13 +38,23 @@ export async function ensureEconomyTables(extra: string[] = []) {
   for (const q of [...ECONOMY_SCHEMA, ...extra]) await sql.query(q).catch((err: Error) => console.warn('Economy table:', err.message))
 }
 
+/*
+ * Every payment is ONE SQL statement: the ledger row and the wallet change commit
+ * together or not at all. (Two statements could record a payment whose coins never
+ * arrived, and the ledger would then refuse to pay it again.)
+ */
+
 /** Pay once for a source (quests, achievements, leagues, challenges). Returns what was paid (0 if already paid). */
 export async function credit(uid: string, sourceId: string, coins: number): Promise<number> {
-  const s = db()
-  const added = await s`insert into lingora_coin_ledger (user_id, source_id, coins) values (${uid}, ${sourceId}, ${coins}) on conflict do nothing returning coins`
-  if (!added.length || !coins) return 0
-  await s`update users set coins = coins + ${coins} where id = ${uid}`
-  return coins
+  const [r] = await db()`
+    with paid as (
+      insert into lingora_coin_ledger (user_id, source_id, coins) values (${uid}, ${sourceId}, ${coins})
+      on conflict do nothing returning coins
+    ), wallet as (
+      update users set coins = coins + (select coins from paid) where id = ${uid} and exists (select 1 from paid) and ${coins}::int <> 0
+    )
+    select coalesce((select coins from paid), 0)::int as coins`
+  return r?.coins ?? 0
 }
 
 async function migrateOnce(uid: string) {
@@ -71,35 +81,58 @@ async function migrateOnce(uid: string) {
 export async function settleCoins(uid: string) {
   await migrateOnce(uid)
   const s = db()
-  const xpRows = await s`insert into lingora_coin_ledger (user_id, source_id, coins)
-    select ${uid}, 'xp:' || client_id, xp * ${COINS_PER_XP} from lingora_xp_events where user_id = ${uid}
-    on conflict do nothing returning coins`
-  const claimRows = await s`insert into lingora_coin_ledger (user_id, source_id, coins)
-    select ${uid}, 'claim:' || day, coins from lingora_daily_claims where user_id = ${uid}
-    on conflict do nothing returning coins`
   const [{ xp }] = await s`select coalesce(sum(xp), 0)::int as xp from lingora_xp_events where user_id = ${uid}`
   const level = levelFromXp(xp)
-  let levelCoins = 0
-  if (level >= 2) {
-    const levels = Array.from({ length: level - 1 }, (_, i) => i + 2)
-    const added = await s`insert into lingora_coin_ledger (user_id, source_id, coins)
-      select ${uid}, 'level:' || l, c from unnest(${levels}::int[], ${levels.map(levelUpCoins)}::int[]) as t(l, c)
-      on conflict do nothing returning coins`
-    levelCoins = added.reduce((n, r) => n + r.coins, 0)
-  }
-  const total = [...xpRows, ...claimRows].reduce((n, r) => n + r.coins, 0) + levelCoins
-  if (total) await s`update users set coins = coins + ${total} where id = ${uid}`
+  const levels = level >= 2 ? Array.from({ length: level - 1 }, (_, i) => i + 2) : []
+  await s`
+    with due as (
+      select 'xp:' || client_id as source_id, xp * ${COINS_PER_XP} as coins from lingora_xp_events where user_id = ${uid}
+      union all
+      select 'claim:' || day, coins from lingora_daily_claims where user_id = ${uid}
+      union all
+      select 'level:' || l, c from unnest(${levels}::int[], ${levels.map(levelUpCoins)}::int[]) as t(l, c)
+    ), paid as (
+      insert into lingora_coin_ledger (user_id, source_id, coins) select ${uid}, source_id, coins from due
+      on conflict do nothing returning coins
+    )
+    update users set coins = coins + (select sum(coins) from paid)
+    where id = ${uid} and (select coalesce(sum(coins), 0) from paid) <> 0`
 }
 
-/** Spend coins on a purchase; false if the wallet doesn't cover it (or it was already paid). */
-export async function chargePurchase(uid: string, purchaseId: string, price: number): Promise<boolean> {
+export type Purchase = { id: string; itemId: string; price: number; at: number }
+
+/**
+ * Buy something: in one statement, record the charge in the ledger, take the coins from
+ * the wallet and record the purchase. False if the wallet doesn't cover it, the item can
+ * only be owned once and is already owned, or this purchase was already handled.
+ */
+export async function buy(uid: string, p: Purchase): Promise<boolean> {
   const s = db()
-  const claimed = await s`insert into lingora_coin_ledger (user_id, source_id, coins) values (${uid}, ${'buy:' + purchaseId}, ${-price}) on conflict do nothing returning coins`
-  if (!claimed.length) return false
-  if (price <= 0) return true
-  const paid = await s`update users set coins = coins - ${price} where id = ${uid} and coins >= ${price} returning coins`
-  if (paid.length) return true
-  await s`delete from lingora_coin_ledger where user_id = ${uid} and source_id = ${'buy:' + purchaseId}`
+  const source = `buy:${p.id}`
+  const [r] = await s`
+    with charge as (
+      insert into lingora_coin_ledger (user_id, source_id, coins)
+      select ${uid}, ${source}, ${-p.price}
+      where (select coins from users where id = ${uid}) >= ${p.price}
+        and (${p.itemId} like 'pw\\_%' or not exists (select 1 from lingora_purchases where user_id = ${uid} and item_id = ${p.itemId}))
+      on conflict do nothing returning coins
+    ), wallet as (
+      update users set coins = coins - ${p.price}
+      where id = ${uid} and coins >= ${p.price} and exists (select 1 from charge) returning 1
+    ), item as (
+      insert into lingora_purchases (user_id, client_id, item_id, price, at_ms)
+      select ${uid}, ${p.id}, ${p.itemId}, ${p.price}, ${p.at} where exists (select 1 from wallet)
+      returning 1
+    )
+    select exists (select 1 from charge) as charged, exists (select 1 from item) as bought`.catch((err: { code?: string }) => {
+    // Bought the same once-only item twice at the same moment: the second one rolls back.
+    if (err?.code === '23505') return [{ charged: false, bought: false }]
+    throw err
+  })
+  if (r.bought) return true
+  // Another purchase took the coins between our check and our debit: nothing was taken
+  // and nothing recorded, so drop the charge row and let this purchase be refused.
+  if (r.charged) await s`delete from lingora_coin_ledger where user_id = ${uid} and source_id = ${source}`
   return false
 }
 
