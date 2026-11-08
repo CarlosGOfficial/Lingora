@@ -12,7 +12,7 @@ import { USERNAME_RE, hashPassword, hashToken, newSessionToken, verifyPassword }
 import { chatEnabled, chatTurn, validateChat } from './chat'
 import { sql, type Sql } from './db'
 import { IS_PROD } from './env'
-import { withRoute } from './ops'
+import { suspendedMessage, suspensionOf, withRoute } from './ops'
 import { FailureLimiter, SESSION_COOKIE, clientIp, currentUserId, db, fail, rateLimit, requireUser, str, type Env } from './http'
 import { registerPushRoutes } from './push'
 import { registerSocialRoutes } from './social'
@@ -38,6 +38,8 @@ app.onError((err, c) => {
 
 /* ---------- Sessions ---------- */
 async function startSession(c: Context, userId: string) {
+  const suspended = await suspensionOf(userId, true)
+  if (suspended) fail(403, suspendedMessage(suspended))
   const s = db()
   const token = newSessionToken()
   await s.transaction([

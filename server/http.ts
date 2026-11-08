@@ -1,3 +1,4 @@
+import { suspendedMessage, suspensionOf } from './ops'
 import type { Context } from 'hono'
 import { getCookie } from 'hono/cookie'
 import { createMiddleware } from 'hono/factory'
@@ -62,6 +63,9 @@ export const requireUser = createMiddleware<Env>(async (c, next) => {
   if (!token) fail(401, 'Please sign in.')
   const rows = await db()`select user_id from lingora_sessions where token_hash = ${hashToken(token!)} and expires_at > now()`
   if (!rows.length) fail(401, 'Your session has expired. Please sign in again.')
+  // Suspended accounts (admin dashboard, shared with Banter and Wordle) can't act.
+  const suspended = await suspensionOf(rows[0].user_id as string)
+  if (suspended) fail(403, suspendedMessage(suspended))
   c.set('userId', rows[0].user_id as string)
   await next()
 })

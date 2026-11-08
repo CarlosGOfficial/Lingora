@@ -1,7 +1,7 @@
 import type { Hono } from 'hono'
 import type { Sql } from './db'
 import { db, fail, requireUser, type Env } from './http'
-import { fileReport } from './ops'
+import { activeAnnouncements, fileReport } from './ops'
 
 /*
  * Blocking, shared with Banter and Wordle Unlimited: the same `chat.blocks` rows (Banter
@@ -33,6 +33,9 @@ export async function blockedByMe(s: Sql, me: string | null | undefined, them: s
 export const BLOCKED_MESSAGE = 'You can’t do that with this person.'
 
 export function registerBlockRoutes(app: Hono<Env>) {
+  // Announcements from the admin dashboard showing in Lingora right now (public).
+  app.get('/ops/announcements', async (c) => c.json(await activeAnnouncements()))
+
   // Reports (server/ops.ts): { kind: "user" | "dm" | "group", userId?, messageId?, reason, note? }
   app.post('/reports', requireUser, async (c) => {
     const r = await fileReport(c.get('userId'), await c.req.json().catch(() => ({})))

@@ -218,11 +218,15 @@ export const flushOps = flushErrors;
 export type Suspension = { reason: string; until: string | null };
 const suspensionCache = new Map<string, { at: number; value: Suspension | null }>();
 
-/** Is this account suspended right now? Cached for 30 seconds per account. */
-export async function suspensionOf(userId: string): Promise<Suspension | null> {
+/**
+ * Is this account suspended right now? Request checks are cached for 15 seconds per account
+ * (so a suspension made in another app reaches this one within 15 s); signing in passes
+ * `fresh` and always asks the database.
+ */
+export async function suspensionOf(userId: string, fresh = false): Promise<Suspension | null> {
   if (!query || !userId) return null;
   const hit = suspensionCache.get(userId);
-  if (hit && Date.now() - hit.at < 30_000) return hit.value;
+  if (!fresh && hit && Date.now() - hit.at < 15_000) return hit.value;
   const rows = await query(`select reason, until from ops.suspensions where user_id = $1 and (until is null or until > now())`, [userId]).catch(() => []);
   const value = rows[0] ? { reason: String(rows[0].reason), until: rows[0].until ? new Date(rows[0].until).toISOString() : null } : null;
   suspensionCache.set(userId, { at: Date.now(), value });

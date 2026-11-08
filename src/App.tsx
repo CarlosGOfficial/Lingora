@@ -1,3 +1,4 @@
+import { AnnouncementBanner } from './components/AnnouncementBanner'
 import { Fragment, useEffect, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
 import { Shell } from './components/Shell'
@@ -66,6 +67,7 @@ export function App() {
   return (
     <BrowserRouter>
       <ThemeApplier />
+      <AnnouncementBanner />
       {!signedIn && !guest ? <PublicSite /> : !onboarded ? <Onboarding /> : <MainApp />}
     </BrowserRouter>
   )
