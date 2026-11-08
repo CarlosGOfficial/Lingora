@@ -432,6 +432,12 @@ export function safePath(path: unknown): string {
   return p.startsWith("/") && !p.startsWith("//") && !p.includes("\\") && p.length <= 500 && !/[\u0000-\u001f]/.test(p) ? p : "/";
 }
 
+/** "chat-x.onrender.com" or "https://chat-x.onrender.com/" → "https://chat-x.onrender.com" ("" if unset). */
+export function siteUrl(v: unknown): string {
+  const t = String(v ?? "").trim().replace(/\/+$/, "");
+  return !t ? "" : /^https?:\/\//i.test(t) ? t : `https://${t}`;
+}
+
 /** Where the three apps live: environment variables first, then each app's heartbeat. */
 export async function appUrls(): Promise<Record<OpsApp, string | null>> {
   const env: Record<OpsApp, string | undefined> = {
@@ -443,7 +449,7 @@ export async function appUrls(): Promise<Record<OpsApp, string | null>> {
   const out = {} as Record<OpsApp, string | null>;
   for (const app of OPS_APPS) {
     const url = env[app] || beats.find((b) => b.app === app)?.url || null;
-    out[app] = url ? String(url).replace(/\/+$/, "") : null;
+    out[app] = siteUrl(url) || null;
   }
   return out;
 }

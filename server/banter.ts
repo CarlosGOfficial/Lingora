@@ -1,3 +1,4 @@
+import { siteUrl } from './ops'
 import type { Hono } from 'hono'
 import type { Sql } from './db'
 import { db, fail, requireUser, str, type Env } from './http'
@@ -9,8 +10,8 @@ import { db, fail, requireUser, str, type Env } from './http'
  * Lingora never writes to their tables.
  */
 
-export const BANTER_URL = (process.env.BANTER_URL || 'https://chat-vdwd.onrender.com').replace(/\/$/, '')
-export const WORDLE_URL = (process.env.WORDLE_URL || 'https://wordle-unlimited-u1dj.onrender.com').replace(/\/$/, '')
+export const BANTER_URL = siteUrl(process.env.BANTER_URL || 'https://chat-vdwd.onrender.com')
+export const WORDLE_URL = siteUrl(process.env.WORDLE_URL || 'https://wordle-unlimited-u1dj.onrender.com')
 
 /** Wordle profile pictures are served here too (same table, same path), so the URLs work as-is. */
 export function avatarUrl(url: unknown): string | null {
