@@ -1761,3 +1761,17 @@ input[type='range'] { accent-color: var(--accent); }
 .duel-review li.no::marker { color: var(--danger); font-weight: 800; }
 @media (max-width: 560px) { .duel-bar { grid-template-columns: minmax(0, 6rem) 1fr 1.6rem; } .duel-prompt { font-size: 1.6rem; } }
 .pill.danger { background: var(--danger-bg); color: var(--danger); }
+
+/* Study rooms (screens/StudyPage.tsx) */
+.study-timer { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px; border-radius: 18px; border: 1px solid var(--border); background: var(--surface); }
+.study-timer.focus { border-color: var(--accent); background: var(--accent-soft); }
+.study-timer.rest { border-color: var(--success); background: var(--success-bg); }
+.study-ring { position: relative; width: 92px; height: 92px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.study-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.study-ring circle { fill: none; stroke-width: 3; }
+.study-ring .track { stroke: color-mix(in srgb, var(--text) 12%, transparent); }
+.study-ring .fill { stroke: var(--accent); stroke-linecap: round; }
+.study-timer.rest .study-ring .fill { stroke: var(--success); }
+.study-ring span { font-family: var(--font-display); font-weight: 800; font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) { .duel-hero { flex-direction: column; align-items: stretch; } }
+.seg button { white-space: nowrap; }

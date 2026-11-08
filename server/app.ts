@@ -21,6 +21,7 @@ import { registerPushRoutes } from './push'
 import { registerSocialRoutes } from './social'
 import { registerBlockRoutes } from './blocks'
 import { registerDuelRoutes } from './duels'
+import { registerStudyRoutes } from './study'
 import { registerBanterRoutes } from './banter'
 import { checkAchievements, registerGoalRoutes } from './goals'
 
@@ -300,6 +301,7 @@ app.post('/progress/reset', requireUser, async (c) => {
 registerSocialRoutes(app)
 registerBlockRoutes(app)
 registerDuelRoutes(app)
+registerStudyRoutes(app)
 registerBanterRoutes(app)
 registerGoalRoutes(app)
 registerPushRoutes(app)

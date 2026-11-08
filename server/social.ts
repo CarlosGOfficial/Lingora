@@ -211,7 +211,7 @@ async function membership(s: Sql, groupId: number, userId: string) {
   return row as { id: number; name: string; owner_id: string | null; last_read_id: number } | undefined
 }
 
-async function postToGroup(s: Sql, groupId: number, fromUserId: string | null, content: string, replyToId: number | null = null) {
+export async function postToGroup(s: Sql, groupId: number, fromUserId: string | null, content: string, replyToId: number | null = null) {
   const [m] = await s`insert into group_messages (group_id, from_user_id, content, reply_to_id) values (${groupId}, ${fromUserId}, ${content}, ${replyToId})
     returning id, from_user_id, content, created_at, reply_to_id, edited_at, deleted_at`
   await s`update group_chats set last_message_at = ${m.created_at} where id = ${groupId}`
@@ -232,12 +232,12 @@ async function postToGroup(s: Sql, groupId: number, fromUserId: string | null, c
 }
 
 /** New members start caught up. */
-async function addMember(s: Sql, groupId: number, userId: string) {
+export async function addMember(s: Sql, groupId: number, userId: string) {
   const [{ max }] = await s`select coalesce(max(id), 0)::int as max from group_messages where group_id = ${groupId}`
   await s`insert into group_members (group_id, user_id, last_read_id, notified_id) values (${groupId}, ${userId}, ${max}, ${max}) on conflict do nothing`
 }
 
-async function groupCount(s: Sql, userId: string): Promise<number> {
+export async function groupCount(s: Sql, userId: string): Promise<number> {
   const [{ n }] = await s`select count(*)::int as n from group_members where user_id = ${userId}`
   return n
 }

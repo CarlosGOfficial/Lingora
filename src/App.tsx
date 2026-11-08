@@ -1,5 +1,6 @@
 import { MistakesPage } from './screens/MistakesPage'
 import { DuelPage, DuelsPage } from './screens/DuelsPage'
+import { StudyPage, StudyRoomPage } from './screens/StudyPage'
 import { AnnouncementBanner } from './components/AnnouncementBanner'
 import { Fragment, useEffect, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
@@ -97,6 +98,8 @@ function MainApp() {
           <Route path="/practice" element={<PracticePage />} />
           <Route path="/mistakes" element={<MistakesPage />} />
           <Route path="/duels" element={<DuelsPage />} />
+          <Route path="/study" element={<StudyPage />} />
+          <Route path="/study/:id" element={<Remount param="id"><StudyRoomPage /></Remount>} />
           <Route path="/duels/:id" element={<Remount param="id"><DuelPage /></Remount>} />
           <Route path="/friends" element={<FriendsPage />} />
           <Route path="/friends/chat/:userId" element={<FriendChatPage />} />

@@ -56,6 +56,13 @@ export function PracticePage() {
           <strong>Duels</strong>
           <span className="muted small">Race a friend or another learner through 10 quick questions. Ranked ladder, coins for playing.</span>
         </Link>
+        <Link to="/study" className="mode-card" data-testid="study-card">
+          <span className="mode-icon">
+            <Icon name="book" size={24} />
+          </span>
+          <strong>Study rooms</strong>
+          <span className="muted small">Study with friends on a shared focus timer, with a room chat and a Banter call.</span>
+        </Link>
         <Link to="/mistakes" className="mode-card" data-testid="mistakes-card">
           <span className="mode-icon">
             <Icon name="flag" size={24} />
