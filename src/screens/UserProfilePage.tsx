@@ -1,3 +1,4 @@
+import { ReportDialog } from '../components/ReportDialog'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
@@ -140,6 +141,7 @@ function Actions({ p, reload }: { p: PublicProfile; reload: () => Promise<void> 
   const [busy, setBusy] = useState(false)
   const [confirm, setConfirm] = useState(false)
   const [error, setError] = useState('')
+  const [reporting, setReporting] = useState(false)
   const run = (fn: () => Promise<unknown>) => async () => {
     setBusy(true)
     try {
@@ -153,6 +155,11 @@ function Actions({ p, reload }: { p: PublicProfile; reload: () => Promise<void> 
   }
   let body: React.ReactNode
   const canBlock = p.relation !== 'self' && p.relation !== 'guest'
+  const reportButton = canBlock && (
+    <button className="btn btn-ghost small" onClick={() => setReporting(true)}>
+      <Icon name="flag" size={16} /> Report
+    </button>
+  )
   const blockButton = canBlock && (
     <button
       className="btn btn-ghost small"
@@ -242,9 +249,11 @@ function Actions({ p, reload }: { p: PublicProfile; reload: () => Promise<void> 
     <>
       <div className="row">
         {body}
+        {reportButton}
         {blockButton}
       </div>
       {error && <p className="error small">{error}</p>}
+      {reporting && <ReportDialog target={{ kind: 'user', userId: p.id, name: p.username }} onClose={() => setReporting(false)} />}
     </>
   )
 }

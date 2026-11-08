@@ -31,6 +31,7 @@ import { useGifFavorites, type Chat } from '../../social/useChat'
 import { Link } from 'react-router-dom'
 import { api } from '../../sync/api'
 import { Icon } from '../Icon'
+import { ReportDialog, type ReportTarget } from '../ReportDialog'
 import { ProfileLink } from '../ProfileLink'
 import { Formatted, mentions } from './Formatted'
 import { useAppLinks } from '../../social/apps'
@@ -342,13 +343,14 @@ function EmojiPicker({ onPick }: { onPick: (emoji: string) => void }) {
 
 type MenuState = { msg: ChatMessage; x: number; y: number; emoji?: boolean }
 
-function MessageMenu({ menu, onClose, onReact, onReply, onEdit, onDelete }: {
+function MessageMenu({ menu, onClose, onReact, onReply, onEdit, onDelete, onReport }: {
   menu: MenuState
   onClose: () => void
   onReact: (emoji: string) => void
   onReply: () => void
   onEdit: () => void
   onDelete: () => void
+  onReport?: () => void
 }) {
   const [showEmoji, setShowEmoji] = useState(!!menu.emoji)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -428,6 +430,11 @@ function MessageMenu({ menu, onClose, onReact, onReply, onEdit, onDelete }: {
               <Icon name="user" size={16} /> View profile
             </Link>
           )}
+          {onReport && !m.mine && m.from && !m.deleted && (
+            <button type="button" className="menu-item" onClick={act(onReport)}>
+              <Icon name="flag" size={16} /> Report message
+            </button>
+          )}
           {m.mine && text && (
             <button type="button" className="menu-item" onClick={act(onEdit)}>
               <Icon name="pencil" size={16} /> Edit
@@ -469,6 +476,7 @@ export function ChatPanel({ kind, chat, meId, person, group, readers, placeholde
   const messages = chat.messages ?? []
   const myName = useStore((st) => st.account?.username ?? null)
   const [menu, setMenu] = useState<MenuState | null>(null)
+  const [reporting, setReporting] = useState<ReportTarget | null>(null)
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
   const [editing, setEditing] = useState<ChatMessage | null>(null)
   const [flash, setFlash] = useState<number | null>(null)
@@ -655,6 +663,7 @@ export function ChatPanel({ kind, chat, meId, person, group, readers, placeholde
         <MessageMenu
           key={`${menu.msg.id}-${menu.x}-${menu.y}`}
           menu={menu}
+          onReport={() => setReporting({ kind, messageId: menu.msg.id })}
           onClose={() => setMenu(null)}
           onReact={(emoji) => void chat.react(menu.msg.id, emoji)}
           onReply={() => {
@@ -668,6 +677,7 @@ export function ChatPanel({ kind, chat, meId, person, group, readers, placeholde
           onDelete={() => void chat.remove(menu.msg.id)}
         />
       )}
+      {reporting && <ReportDialog target={reporting} onClose={() => setReporting(null)} />}
 
       {chat.error && (
         <p className="error small" role="alert">

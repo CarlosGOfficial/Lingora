@@ -1564,6 +1564,12 @@ input[type='range'] { accent-color: var(--accent); }
 .reset-lists ul { margin: 4px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 @media (max-width: 420px) { .reset-lists { grid-template-columns: 1fr; } }
 .modal-actions { justify-content: flex-end; margin-top: 4px; }
+.report-reasons { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.report-reason { padding: 8px 10px; border-radius: 12px; border: 1px solid var(--glass-border); background: transparent; color: inherit; font: inherit; font-size: .88rem; text-align: left; cursor: pointer; }
+.report-reason:hover { background: color-mix(in srgb, currentColor 6%, transparent); }
+.report-reason.on { border-color: var(--accent, #7c3aed); background: color-mix(in srgb, var(--accent, #7c3aed) 14%, transparent); font-weight: 700; }
+@media (max-width: 420px) { .report-reasons { grid-template-columns: 1fr; } }
+.modal textarea { font: inherit; }
 .btn-danger-solid { background: var(--danger); background-image: none; color: #fff; border-color: transparent; box-shadow: 0 6px 16px -8px var(--danger); }
 .btn-danger-solid:disabled { opacity: .45; box-shadow: none; }
 /* ---------- Chat formatting (same as Banter's) ---------- */

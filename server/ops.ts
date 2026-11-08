@@ -260,3 +260,89 @@ export async function audit(actorId: string | null, action: string, targetId: st
   await query(`insert into ops.audit (actor_id, app, action, target_id, detail) values ($1, $2, $3, $4, $5::jsonb)`, [actorId, thisApp, action, targetId, JSON.stringify(detail)])
     .catch((err) => original.warn("[ops] Audit log failed:", err?.message));
 }
+
+/* ---------- Reports ---------- */
+
+export const REPORT_REASONS = ["spam", "harassment", "hate", "sexual", "violence", "self_harm", "impersonation", "cheating", "other"] as const;
+export type ReportReason = (typeof REPORT_REASONS)[number];
+export type ReportKind = "user" | "dm" | "group" | "channel";
+export type ReportInput = { kind?: unknown; userId?: unknown; messageId?: unknown; reason?: unknown; note?: unknown };
+/** What Banter works out for a server-channel message (it checks the reporter can see it). */
+export type ChannelTarget = { messageId: number; senderId: string | null; content: string; serverId: number };
+export type ReportResult = { ok: true; id: number } | { ok: false; status: number; message: string };
+
+const REPORTS_PER_HOUR = 10;
+const MESSAGE_TABLE: Record<Exclude<ReportKind, "user">, string> = { dm: "direct_messages", group: "group_messages", channel: "chat.messages" };
+
+/**
+ * File a report about a person or a message they sent. DMs and group messages are checked
+ * here (the reporter must be in that conversation); channel messages are checked by Banter,
+ * which passes the result as `channel`.
+ */
+export async function fileReport(reporterId: string, input: ReportInput, channel?: ChannelTarget): Promise<ReportResult> {
+  if (!query) return { ok: false, status: 503, message: "Reports aren't available right now." };
+  const no = (status: number, message: string): ReportResult => ({ ok: false, status, message });
+  const kind = String(input.kind ?? "") as ReportKind;
+  const reason = String(input.reason ?? "") as ReportReason;
+  if (!["user", "dm", "group", "channel"].includes(kind)) return no(400, "Choose what you're reporting.");
+  if (!REPORT_REASONS.includes(reason)) return no(400, "Choose a reason.");
+  const note = String(input.note ?? "").trim().slice(0, 500) || null;
+  const [{ n }] = await query(`select count(*)::int as n from ops.reports where reporter_id = $1 and created_at > now() - interval '1 hour'`, [reporterId]);
+  if (n >= REPORTS_PER_HOUR) return no(429, "You've sent a lot of reports. Try again in a while.");
+
+  let target: string | null = null, messageId: number | null = null, excerpt: string | null = null, serverId: number | null = null;
+  if (kind === "user") {
+    target = String(input.userId ?? "");
+    if (!target || target === reporterId) return no(400, "Choose someone to report.");
+    if (!(await query(`select 1 from users where id = $1`, [target])).length) return no(404, "That person isn't here any more.");
+  } else {
+    messageId = Number(input.messageId);
+    if (!Number.isInteger(messageId) || messageId <= 0) return no(400, "Choose a message to report.");
+    let row: { sender: string | null; content: string } | undefined;
+    if (kind === "dm") {
+      [row] = await query(`select from_user_id as sender, content from direct_messages where id = $1 and deleted_at is null and (from_user_id = $2 or to_user_id = $2)`, [messageId, reporterId]);
+    } else if (kind === "group") {
+      [row] = await query(`select m.from_user_id as sender, m.content from group_messages m join group_members gm on gm.group_id = m.group_id and gm.user_id = $2
+        where m.id = $1 and m.deleted_at is null`, [messageId, reporterId]);
+    } else if (channel && channel.messageId === messageId) {
+      row = { sender: channel.senderId, content: channel.content };
+      serverId = channel.serverId;
+    }
+    if (!row) return no(404, "That message is gone.");
+    if (row.sender === reporterId) return no(400, "You can't report your own message.");
+    target = row.sender;
+    excerpt = row.content.slice(0, 500);
+  }
+  const dupe = await query(
+    `select 1 from ops.reports where reporter_id = $1 and status = 'open' and kind = $2 and (message_id = $3 or ($3::bigint is null and target_user_id = $4))`,
+    [reporterId, kind, messageId, target],
+  );
+  if (dupe.length) return no(409, "You've already reported this. Thanks, we're looking into it.");
+  const [r] = await query(
+    `insert into ops.reports (reporter_id, target_user_id, app, kind, message_id, server_id, excerpt, reason, note) values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id`,
+    [reporterId, target, thisApp, kind, messageId, serverId, excerpt, reason, note],
+  );
+  return { ok: true, id: Number(r.id) };
+}
+
+export type ReportAction = "dismiss" | "delete_message" | "actioned";
+
+/**
+ * Close a report. "delete_message" also removes the reported message (as a deletion by
+ * moderators). With `serverId`, only that Banter server's reports can be handled.
+ */
+export async function handleReport(reportId: number, byId: string, action: ReportAction, serverId?: number): Promise<ReportResult> {
+  if (!query) return { ok: false, status: 503, message: "Reports aren't available right now." };
+  if (!["dismiss", "delete_message", "actioned"].includes(action)) return { ok: false, status: 400, message: "Unknown action." };
+  const [rep] = await query(`select id, kind, message_id, server_id, status from ops.reports where id = $1`, [reportId]);
+  if (!rep || (serverId !== undefined && Number(rep.server_id) !== serverId)) return { ok: false, status: 404, message: "That report is gone." };
+  if (action === "delete_message") {
+    const table = MESSAGE_TABLE[rep.kind as Exclude<ReportKind, "user">];
+    if (!table || !rep.message_id) return { ok: false, status: 400, message: "This report isn't about a message." };
+    await query(`update ${table} set deleted_at = coalesce(deleted_at, now()) where id = $1`, [rep.message_id]);
+  }
+  await query(`update ops.reports set status = $2, action = $3, handled_by = $4, handled_at = now() where id = $1`,
+    [reportId, action === "dismiss" ? "dismissed" : "actioned", action, byId]);
+  await audit(byId, `report.${action}`, null, { reportId, kind: rep.kind, messageId: rep.message_id, serverId: rep.server_id });
+  return { ok: true, id: reportId };
+}

@@ -1,6 +1,7 @@
 import type { Hono } from 'hono'
 import type { Sql } from './db'
 import { db, fail, requireUser, type Env } from './http'
+import { fileReport } from './ops'
 
 /*
  * Blocking, shared with Banter and Wordle Unlimited: the same `chat.blocks` rows (Banter
@@ -32,6 +33,13 @@ export async function blockedByMe(s: Sql, me: string | null | undefined, them: s
 export const BLOCKED_MESSAGE = 'You can’t do that with this person.'
 
 export function registerBlockRoutes(app: Hono<Env>) {
+  // Reports (server/ops.ts): { kind: "user" | "dm" | "group", userId?, messageId?, reason, note? }
+  app.post('/reports', requireUser, async (c) => {
+    const r = await fileReport(c.get('userId'), await c.req.json().catch(() => ({})))
+    if (!r.ok) fail(r.status as 400, r.message)
+    return c.json({ ok: true })
+  })
+
   app.put('/blocks/:userId', requireUser, async (c) => {
     const me = c.get('userId')
     const them = c.req.param('userId')
