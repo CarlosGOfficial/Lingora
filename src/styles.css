@@ -1803,3 +1803,22 @@ input[type='range'] { accent-color: var(--accent); }
 .season-cell.claimed { background: var(--surface-2); color: var(--muted); }
 .season-cell.locked { opacity: .6; }
 .season-cell .btn.small { padding: 3px 8px; font-size: .72rem; }
+
+/* Trophy case (components/TrophyCase.tsx) */
+.trophy-shelf { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px; }
+.pinned-shelf { padding: 12px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface-2, var(--surface)); gap: 10px; }
+.trophy { position: relative; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-size: 1.3rem; border: 2px solid var(--border); background: var(--surface); cursor: pointer; padding: 0; }
+.trophy.big { width: 58px; height: 58px; font-size: 1.9rem; }
+.trophy.open { outline: 2px solid var(--accent); outline-offset: 2px; }
+.trophy.pinned::after { content: '📌'; position: absolute; top: -8px; right: -8px; font-size: .75rem; }
+.trophy.tier-special { border-color: #d946ef; background: color-mix(in srgb, #d946ef 12%, var(--surface)); }
+.trophy.tier-gold { border-color: #f5b301; background: color-mix(in srgb, #f5b301 12%, var(--surface)); }
+.trophy.tier-silver { border-color: #a8b3c1; background: color-mix(in srgb, #a8b3c1 14%, var(--surface)); }
+.trophy.tier-bronze { border-color: #b4693a; background: color-mix(in srgb, #b4693a 10%, var(--surface)); }
+.trophy-count { display: inline-flex; align-items: center; gap: 4px; font-size: .78rem; font-weight: 700; color: var(--muted); }
+.trophy-count::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+.trophy-count.tier-special::before { background: #d946ef; } .trophy-count.tier-gold::before { background: #f5b301; }
+.trophy-count.tier-silver::before { background: #a8b3c1; } .trophy-count.tier-bronze::before { background: #b4693a; }
+.trophy-app { text-transform: uppercase; letter-spacing: .06em; font-weight: 700; font-size: .7rem; }
+.trophy-detail { padding: 10px 12px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); }
+.trophy-detail-icon { font-size: 1.8rem; }

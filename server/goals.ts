@@ -1,3 +1,4 @@
+import { noteTrophies } from './trophies'
 import type { Hono } from 'hono'
 import {
   ACHIEVEMENTS, CHALLENGE_HOURS, CHALLENGE_PRIZE, DIVISIONS, LEAGUE_MOVES, LEAGUE_PRIZES, LEAGUE_SIZE, questsFor,
@@ -93,6 +94,7 @@ async function statsFor(uid: string, today: string): Promise<GoalStats> {
 
 /** Unlock (and pay for) any achievements newly earned. */
 export async function checkAchievements(uid: string, today: string) {
+  noteTrophies(uid)
   const stats = await statsFor(uid, today)
   const s = db()
   // Done means paid (a ledger row), so an unlock whose payment failed is paid on the next sync.

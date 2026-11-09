@@ -11,6 +11,7 @@ import { refreshFriends } from '../social/useFriends'
 import { useAppLinks } from '../social/apps'
 import { Avatar } from '../components/chat/ChatPanel'
 import { api } from '../sync/api'
+import { TrophyCase } from '../components/TrophyCase'
 
 /** Someone's public profile (opened from leaderboards, friend lists and chats). */
 export function UserProfilePage() {
@@ -80,12 +81,6 @@ export function UserProfilePage() {
             <Stat tone="xp" label="Words" value={p.lingora.words} />
             <Stat tone="flame" label="Active days" value={p.lingora.activeDays} />
           </section>
-          {!!p.lingora.badges?.length && (
-            <section className="card">
-              <h2>🏅 Badges</h2>
-              <div className="row wrap">{p.lingora.badges.map((b) => <span key={b.id} className="pill" title={b.name}>{b.icon} {b.name}</span>)}</div>
-            </section>
-          )}
           <section className="stack-sm">
             <h2>Courses</h2>
             {p.lingora.courses.length === 0 && <p className="small muted">Hasn’t finished a lesson yet.</p>}
@@ -117,6 +112,8 @@ export function UserProfilePage() {
       ) : (
         <div className="cta-card calm">{p.relation === 'self' ? 'Finish a lesson to start your Lingora stats.' : `${p.username} hasn’t started Lingora yet.`}</div>
       )}
+
+      <TrophyCase userId={p.id} />
 
       {p.wordle && (
         <p className="small muted wordle-line">

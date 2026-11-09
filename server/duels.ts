@@ -1,3 +1,4 @@
+import { noteTrophies } from './trophies'
 import type { Hono } from 'hono'
 import { randomInt } from 'crypto'
 import type { Sql } from './db'
@@ -112,6 +113,7 @@ async function finishIfDone(s: Sql, d: any) {
           draws = lingora_duel_ratings.draws + ${result === 0.5 ? 1 : 0}`
     }
     await credit(uid, `duel:${d.id}`, result === 1 ? DUEL_COINS.win : result === 0.5 ? DUEL_COINS.draw : DUEL_COINS.loss)
+    if (d.ranked) noteTrophies(uid)
   }
   return done
 }

@@ -1,3 +1,4 @@
+import { registerTrophyRoutes } from './trophies'
 import { findLesson, findReading } from '../src/content'
 import { findStory } from '../src/content/stories'
 import { levelFromXp } from '../src/shop/catalog'
@@ -306,6 +307,7 @@ registerStudyRoutes(app)
 registerCrossEventRoutes(app)
 registerBanterRoutes(app)
 registerGoalRoutes(app)
+registerTrophyRoutes(app)
 registerPushRoutes(app)
 
 /* ---------- Saved themes (the same table and shape as Wordle Unlimited) ---------- */

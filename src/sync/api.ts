@@ -1,3 +1,4 @@
+import type { TrophyCaseData } from '../components/TrophyCase'
 import type { ChatReply, ChatRequest } from '../chat/types'
 import type { CustomTheme } from '../theme/themes'
 import type { LangCode } from '../content/types'
@@ -72,6 +73,8 @@ export const api = {
   inviteStudy: (id: number, friendId: string) => request<{ ok: true }>(`/study/${id}/invite`, { body: { friendId } }),
   leaveStudy: (id: number) => request<{ ok: true }>(`/study/${id}/leave`, { method: 'POST' }),
   season: () => request<any>('/season'),
+  trophies: (userId: string) => request<TrophyCaseData>(`/trophies/${encodeURIComponent(userId)}`),
+  pinTrophies: (ids: string[]) => request<{ pinned: string[] }>('/trophies/pins', { method: 'PUT', body: { ids } }),
   claimSeason: (tier: number, track: 'free' | 'premium') => request<any>('/season/claim', { body: { tier, track } }),
   buySeasonPremium: () => request<{ ok: true }>('/season/premium', { method: 'POST' }),
   crossEvents: () => request<any[]>('/cross-events'),

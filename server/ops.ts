@@ -10,6 +10,7 @@
  *   and written to ops.errors in batches. The admin dashboard (Wordle /admin) shows them.
  * - A heartbeat per app (commit, start time, address) for the dashboard's Health tab.
  * - Small shared helpers: suspensions and announcements.
+ * - Shared features: the activity hub, cross-app events, the season pass and the trophy case.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomBytes } from "node:crypto";
@@ -160,6 +161,22 @@ export const OPS_SCHEMA = [
     user_id text primary key references users(id) on delete cascade,
     hidden text[] not null default '{}'
   )`,
+  // Trophy case: what each person has earned in any of the apps (each app writes its own).
+  `create table if not exists ops.trophies (
+    user_id text not null references users(id) on delete cascade,
+    app text not null,
+    key text not null,
+    name text not null,
+    icon text not null,
+    tier text not null default 'bronze',
+    detail text not null default '',
+    earned_at timestamptz not null default now(),
+    primary key (user_id, app, key)
+  )`,
+  `create table if not exists ops.trophy_pins (
+    user_id text primary key references users(id) on delete cascade,
+    ids text[] not null default '{}'
+  )`,
   `create table if not exists ops.smoke_runs (
     id bigserial primary key,
     trigger text not null,
@@ -259,6 +276,9 @@ async function heartbeat() {
 /* ---------- Start ---------- */
 
 let started = false;
+let markReady: () => void = () => {};
+/** Resolves once startOps() has set up the tables (never, if they couldn't be). */
+export const opsReady = new Promise<void>((resolve) => { markReady = resolve; });
 /** Create the ops tables, start capturing errors and sending heartbeats. Safe to call once at start-up. */
 export async function startOps(app: OpsApp, run: OpsQuery) {
   if (started) return;
@@ -268,6 +288,7 @@ export async function startOps(app: OpsApp, run: OpsQuery) {
     try { await run(statement); } catch (err: any) { original.warn("[ops] Setting up the ops tables failed:", err?.message); return; }
   }
   query = run;
+  markReady();
   console.error = (...args: unknown[]) => { original.error(...args); trackError(args); };
   void heartbeat();
   setInterval(() => void heartbeat(), 60_000).unref();
@@ -706,6 +727,7 @@ export async function claimSeasonTier(userId: string, tier: number, track: "free
      )
      select exists (select 1 from claimed) as ok`,
     [v.id, userId, tier, reward.coins ?? 0, reward.itemId, reward.itemType ?? "title"]);
+  if (r?.ok && reward.itemType === "title") await syncSeasonTrophies(userId).catch(() => {});
   return r?.ok ? { reward } : { error: "Already claimed." };
 }
 
@@ -840,4 +862,134 @@ export async function setActivitySharing(userId: string, hidden: unknown) {
   await query(`insert into ops.activity_prefs (user_id, hidden) values ($1, $2) on conflict (user_id) do update set hidden = $2`, [userId, list]);
   // Hiding a kind also takes back what's already in friends' feeds.
   if (list.length) await query(`delete from ops.activity where user_id = $1 and kind = any($2::text[])`, [userId, list]);
+}
+
+/* ---------- Trophy case: one shelf of everything earned across the apps ---------- */
+/*
+ * Each app describes its trophies as rules: a catalog (key → name, icon, tier) and a SQL
+ * query listing (user_id, key, earned_at) for everyone who has earned one, taking $1 = a
+ * user id or null for everyone (use it inside the query to keep one person's sync cheap). syncTrophies() turns that into ops.trophies rows in one
+ * statement, so it's safe to run at start-up, on a timer and after anything that might
+ * earn one. Season titles (from the season pass) are kept by this file itself.
+ */
+export const TROPHY_TIERS = ["special", "gold", "silver", "bronze"] as const;
+export type TrophyTier = (typeof TROPHY_TIERS)[number];
+export type TrophyApp = OpsApp | "season";
+export type TrophyDef = { key: string; name: string; icon: string; tier: TrophyTier; detail: string };
+/** With no defs, `earned` also returns name, icon, tier and detail itself (for trophies made from data, like events). */
+export type TrophyRule = { defs: TrophyDef[]; earned: string };
+export type Trophy = TrophyDef & { id: string; app: TrophyApp; earnedAt: string };
+export type TrophyStats = { wordleWins: number | null; rankedPeak: number | null; lingoraXp: number | null; lingoraStreak: number | null; banterLevel: number | null };
+export type TrophyCase = { trophies: Trophy[]; pinned: string[]; counts: Record<TrophyTier, number>; stats: TrophyStats; mine: boolean };
+export const MAX_PINS = 6;
+
+async function syncSeasonTrophies(userId: string | null) {
+  await query!(
+    `insert into ops.trophies (user_id, app, key, name, icon, tier, detail)
+     select p.user_id, 'season', 'season:' || s.id || ':' || x.track || ':' || x.n, coalesce(x.r->>'itemName', 'Season title'), '🎗️', 'special', s.name
+     from ops.season_pass p join ops.seasons s on s.id = p.season_id
+     cross join lateral (
+       select 'free' as track, e.n::int as n, e.r->'free' as r from jsonb_array_elements(s.tiers) with ordinality as e(r, n) where e.n::int = any(p.claimed_free)
+       union all
+       select 'premium', e.n::int, e.r->'premium' from jsonb_array_elements(s.tiers) with ordinality as e(r, n) where e.n::int = any(p.claimed_premium)
+     ) x
+     where x.r->>'itemType' = 'title' and ($1::text is null or p.user_id = $1)
+     on conflict do nothing`,
+    [userId]);
+}
+
+/** Write this app's earned trophies (one person, or everyone with null). Never throws. */
+export async function syncTrophies(rules: TrophyRule[], userId: string | null = null) {
+  if (!query) return;
+  for (const rule of rules) {
+    await query(
+      `insert into ops.trophies (user_id, app, key, name, icon, tier, detail, earned_at)
+       select e.user_id, $2, e.key, d.name, d.icon, d.tier, d.detail, coalesce(e.earned_at, now())
+       from (${rule.earned}) e
+       ${rule.defs.length ? "join jsonb_to_recordset($3::jsonb) as d(key text, name text, icon text, tier text, detail text) on d.key = e.key" : "cross join lateral (select e.name, e.icon, e.tier, e.detail, $3::jsonb as unused) d"}
+       where ($1::text is null or e.user_id = $1)
+       on conflict (user_id, app, key) do update set name = excluded.name, icon = excluded.icon, tier = excluded.tier, detail = excluded.detail
+         where (ops.trophies.name, ops.trophies.icon, ops.trophies.tier, ops.trophies.detail) is distinct from (excluded.name, excluded.icon, excluded.tier, excluded.detail)`,
+      [userId, thisApp, JSON.stringify(rule.defs)],
+    ).catch((err) => original.warn("[ops] Trophy sync failed:", err?.message));
+  }
+  await syncSeasonTrophies(userId).catch((err) => original.warn("[ops] Season trophy sync failed:", err?.message));
+}
+
+const trophyTimers = new Map<string, ReturnType<typeof setTimeout>>();
+/** Sync one person's trophies soon (several calls in a row are folded into one). */
+export function touchTrophies(rules: TrophyRule[], userId: string) {
+  if (!query || trophyTimers.has(userId)) return;
+  trophyTimers.set(userId, setTimeout(() => { trophyTimers.delete(userId); void syncTrophies(rules, userId); }, 2000));
+}
+
+/** Everyone's trophies now, then every hour (catches anything a hook missed). */
+export function startTrophies(rules: TrophyRule[]) {
+  void opsReady.then(() => {
+    void syncTrophies(rules);
+    setInterval(() => void syncTrophies(rules), 3_600_000).unref();
+  });
+}
+
+const lastCaseSync = new Map<string, number>();
+/**
+ * Someone's trophy case, or null if either of you has blocked the other. With this app's
+ * rules, their shelf here is brought up to date first (at most once a minute per person).
+ */
+export async function trophyCase(userId: string, viewerId: string | null, rules?: TrophyRule[]): Promise<TrophyCase | null> {
+  if (!query) return null;
+  if (viewerId && viewerId !== userId) {
+    const [b] = await query(`select 1 from chat.blocks where (user_id = $1 and blocked_id = $2) or (user_id = $2 and blocked_id = $1) limit 1`, [userId, viewerId]).catch(() => []);
+    if (b) return null;
+  }
+  if (rules && Date.now() - (lastCaseSync.get(userId) ?? 0) > 60_000) {
+    if (lastCaseSync.size > 5000) lastCaseSync.clear();
+    lastCaseSync.set(userId, Date.now());
+    await syncTrophies(rules, userId);
+  }
+  const [rows, [pins], stats] = await Promise.all([
+    query(`select * from ops.trophies where user_id = $1 order by earned_at desc`, [userId]).catch(() => []),
+    query(`select ids from ops.trophy_pins where user_id = $1`, [userId]).catch(() => []),
+    trophyStats(userId),
+  ]);
+  const trophies: Trophy[] = rows.map((r) => ({
+    id: `${r.app}:${r.key}`, app: r.app, key: r.key, name: r.name, icon: r.icon, tier: r.tier, detail: r.detail, earnedAt: new Date(r.earned_at).toISOString(),
+  }));
+  const have = new Set(trophies.map((t) => t.id));
+  const counts = { special: 0, gold: 0, silver: 0, bronze: 0 } as Record<TrophyTier, number>;
+  for (const t of trophies) if (t.tier in counts) counts[t.tier]++;
+  return { trophies, pinned: ((pins?.ids ?? []) as string[]).filter((id) => have.has(id)), counts, stats, mine: viewerId === userId };
+}
+
+const one = async (sql: string, userId: string): Promise<number | null> => {
+  const [r] = await query!(sql, [userId]).catch(() => []);
+  return r?.v == null ? null : Number(r.v);
+};
+async function trophyStats(userId: string): Promise<TrophyStats> {
+  const [wordleWins, rankedPeak, lingoraXp, lingoraStreak, banterXp] = await Promise.all([
+    one(`select rounds_won as v from users where id = $1`, userId),
+    one(`select max(peak) as v from ranked_ratings where user_id = $1 and games > 0`, userId),
+    one(`select sum(xp)::int as v from lingora_xp_events where user_id = $1`, userId),
+    // Lingora's longest streak: days (UTC) with any XP, in a row.
+    one(`with d as (select distinct (to_timestamp(at_ms / 1000.0) at time zone 'UTC')::date as day from lingora_xp_events where user_id = $1)
+         select max(n) as v from (select count(*) as n from (select day, day - (row_number() over (order by day))::int as g from d) x group by g) y`, userId),
+    one(`select max(xp) as v from chat.member_xp where user_id = $1`, userId),
+  ]);
+  // Banter's server levels: level n → n+1 takes 5n² + 50n + 100 XP (shared/levels.ts there).
+  let banterLevel: number | null = null;
+  if (banterXp != null) { let left = banterXp, l = 0; while (l < 500 && left >= 5 * l * l + 50 * l + 100) { left -= 5 * l * l + 50 * l + 100; l++; } banterLevel = l; }
+  return { wordleWins, rankedPeak, lingoraXp, lingoraStreak, banterLevel };
+}
+
+/** Choose up to MAX_PINS of your own trophies to show first. */
+export async function pinTrophies(userId: string, ids: unknown): Promise<string[]> {
+  if (!query) return [];
+  const want = Array.from(new Set((Array.isArray(ids) ? ids : []).filter((x): x is string => typeof x === "string"))).slice(0, MAX_PINS);
+  const [r] = await query(
+    `insert into ops.trophy_pins (user_id, ids)
+     select $1, coalesce(array_agg(w.id order by w.n), '{}') from unnest($2::text[]) with ordinality as w(id, n)
+     where exists (select 1 from ops.trophies t where t.user_id = $1 and t.app || ':' || t.key = w.id)
+     on conflict (user_id) do update set ids = excluded.ids returning ids`,
+    [userId, want]);
+  return r?.ids ?? [];
 }
