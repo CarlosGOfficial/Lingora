@@ -1,6 +1,7 @@
+import { recognitionSupported } from '../lib/speech'
 import { ReadingToggle } from '../components/ReadingToggle'
 import { useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { AudioButton } from '../components/AudioButton'
 import { CompleteScreen } from '../components/CompleteScreen'
 import { Icon } from '../components/Icon'
@@ -41,7 +42,10 @@ export function ReadingPage() {
 
       <div className="reading-body">
         <section className="passage">
-          <AudioButton text={reading.sentences.map((s) => s.target).join(' ')} lang={course.bcp47} withSlow />
+          <div className="row">
+            <AudioButton text={reading.sentences.map((s) => s.target).join(' ')} lang={course.bcp47} withSlow />
+            {recognitionSupported() && <Link to={`/read-aloud/reading/${reading.id}`} className="btn small" data-testid="read-aloud"><Icon name="mic" size={14} /> Read it aloud</Link>}
+          </div>
           {reading.sentences.map((s, i) => (
             <div key={s.id} className="passage-line">
               <button className="passage-text" onClick={() => setShown({ ...shown, [i]: !shown[i] })} title="Tap to show translation">

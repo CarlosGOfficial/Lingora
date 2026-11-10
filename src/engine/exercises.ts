@@ -14,7 +14,11 @@ export type Exercise =
   | { type: 'dictation'; item: Item }
   | { type: 'match'; items: Item[] }
   | { type: 'build'; item: Item; bank: string[] }
-  | { type: 'speak'; item: Item }
+  /**
+   * Speaking. shadow (default): hear it and see it, say it. echo: hear it without the text.
+   * say: see the English, say it in the language. read: read the text aloud (no audio first).
+   */
+  | { type: 'speak'; item: Item; mode?: SpeakMode }
   /** Trace one character of the word, stroke by stroke (zh / ja). */
   | { type: 'write'; item: Item; char: string }
   | { type: 'grammar'; point: GrammarPoint }
@@ -23,6 +27,7 @@ export type Exercise =
   /** Characters shown without their reading; pick the right pinyin / kana. */
   | { type: 'reading'; item: Item; options: string[] }
 
+export type SpeakMode = 'shadow' | 'echo' | 'say' | 'read'
 type Opts = Pick<Settings, 'listening' | 'speaking'>
 
 /** Listening drills are impossible without a TTS voice for the language. */
@@ -174,8 +179,14 @@ export function buildPractice(mode: PracticeMode, items: Item[], course: Course,
   const pool = allItems(course)
   if (mode === 'speaking') {
     const sentences = items.filter((i) => i.kind === 'sentence')
-    const picks = [...sample(sentences, 5), ...sample(items.filter((i) => i.kind === 'word'), 3)]
-    return shuffle(picks).map((item) => ({ type: 'speak', item }))
+    const words = items.filter((i) => i.kind === 'word')
+    // A mix: shadow sentences, echo some without the text, and say some from the English.
+    const shadow = sample(sentences, 4).map((item): Exercise => ({ type: 'speak', item, mode: 'shadow' }))
+    const used = new Set(shadow.map((e) => (e as { item: Item }).item.id))
+    const echo = sample([...words, ...sentences].filter((i) => !used.has(i.id)), 2).map((item): Exercise => ({ type: 'speak', item, mode: 'echo' }))
+    for (const e of echo) used.add((e as { item: Item }).item.id)
+    const say = sample(words.filter((i) => !used.has(i.id)), 2).map((item): Exercise => ({ type: 'speak', item, mode: 'say' }))
+    return shuffle([...shadow, ...echo, ...say])
   }
   if (mode === 'listening') {
     return sample(items, 8).map((item, i) => (i % 2 === 0 ? { type: 'dictation', item } : mcq(item, pool, 'audio')))
@@ -210,4 +221,9 @@ export function buildDeckLearn(items: Item[], pool: Item[]): Exercise[] {
   const intros: Exercise[] = items.map((item) => ({ type: 'intro', item }))
   const quiz = shuffle(items.flatMap((item) => [mcq(item, pool, 'target'), mcq(item, pool, 'meaning')]))
   return [...intros, ...(items.length >= 4 ? [{ type: 'match', items: sample(items, 4) } as Exercise] : []), ...quiz]
+}
+
+/** Read a passage aloud, sentence by sentence (graded readers and stories). */
+export function buildReadAloud(sentences: Item[]): Exercise[] {
+  return sentences.slice(0, 10).map((item) => ({ type: 'speak', item, mode: 'read' }))
 }

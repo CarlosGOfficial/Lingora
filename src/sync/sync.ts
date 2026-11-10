@@ -1,3 +1,4 @@
+import { flushSpeech } from '../lib/speechLog'
 import { LANG_CODES } from '../content'
 import type { LangCode } from '../content/types'
 import { dayKey } from '../lib/date'
@@ -68,6 +69,7 @@ export function syncNow(): Promise<void> {
         syncError: null,
       })
       void refreshDecks()
+      void flushSpeech()
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) useStore.setState({ account: null, syncError: 'Signed out — please sign in again.' })
       else useStore.setState({ syncError: (e as Error).message })

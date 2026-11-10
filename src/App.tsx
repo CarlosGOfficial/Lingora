@@ -27,6 +27,7 @@ import { ShopPage } from './screens/ShopPage'
 import { ThemeStudioPage } from './screens/ThemeStudioPage'
 import { UnitReviewPage } from './screens/UnitReviewPage'
 import { UserProfilePage } from './screens/UserProfilePage'
+import { ReadAloudPage } from './screens/ReadAloudPage'
 import { DeckEditor, DeckLearn, DeckPage, DecksPage } from './screens/DecksPage'
 import { ThemeApplier } from './theme/ThemeApplier'
 import { useStore } from './store/useStore'
@@ -94,6 +95,7 @@ function MainApp() {
         <Route path="/section-test/:index" element={<Remount param="index"><SectionTestPage /></Remount>} />
         <Route path="/practice/:mode" element={<Remount param="mode"><PracticeSession /></Remount>} />
         <Route path="/decks/:id/learn" element={<Remount param="id"><DeckLearn /></Remount>} />
+        <Route path="/read-aloud/:kind/:id" element={<Remount param="id"><ReadAloudPage /></Remount>} />
         <Route element={<Shell />}>
           <Route index element={<Home />} />
           <Route path="/review" element={<ReviewPage />} />

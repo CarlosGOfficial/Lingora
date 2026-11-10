@@ -1,3 +1,4 @@
+import { speakingCounts } from './speech'
 import { noteTrophies } from './trophies'
 import type { Hono } from 'hono'
 import {
@@ -113,16 +114,17 @@ async function questViews(uid: string, day: string, tzMin: number): Promise<Ques
   const s = db()
   // The learner's day, in their own time zone, as a time range.
   const from = Date.parse(`${day}T00:00:00Z`) + tzMin * 60_000, to = from + 86_400_000
-  const [[xp], [rv], comp, claimed] = await Promise.all([
+  const [[xp], [rv], comp, claimed, speech] = await Promise.all([
     s`select coalesce(sum(xp), 0)::int as n from lingora_xp_events where user_id = ${uid} and day = ${day}::date`,
     s`select count(*)::int as n, count(*) filter (where rating >= 3)::int as good from lingora_review_logs where user_id = ${uid} and at_ms >= ${from} and at_ms < ${to}`,
     s`select kind, count(*)::int as n from lingora_completions where user_id = ${uid} and at_ms >= ${from} and at_ms < ${to} group by kind`,
     s`select quest_id from lingora_quest_claims where user_id = ${uid} and day = ${day}`,
+    speakingCounts(uid, from, to),
   ])
   const done = new Set(claimed.map((r) => r.quest_id))
   const kind = (k: string) => comp.find((c) => c.kind === k)?.n ?? 0
-  const value = { xp: xp.n, reviews: rv.n, good_reviews: rv.good, lessons: kind('lesson'), readings: kind('reading'), stories: kind('story') }
-  return questsFor(uid, day).map((q) => ({ ...q, progress: Math.min(q.target, value[q.metric]), claimed: done.has(q.id), day }))
+  const value = { xp: xp.n, reviews: rv.n, good_reviews: rv.good, lessons: kind('lesson'), readings: kind('reading'), stories: kind('story'), speak: speech.passed }
+  return questsFor(uid, day, { speaker: speech.speaker }).map((q) => ({ ...q, progress: Math.min(q.target, value[q.metric]), claimed: done.has(q.id), day }))
 }
 
 /* ---------- Leagues ---------- */

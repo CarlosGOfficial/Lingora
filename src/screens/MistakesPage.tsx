@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AudioButton } from '../components/AudioButton'
 import { Icon } from '../components/Icon'
@@ -9,12 +9,16 @@ import type { Item, LangCode } from '../content/types'
 import { DAY_MS, retrievability } from '../lib/fsrs'
 import { timeAgo } from '../lib/time'
 import { useStore, type CardRecord } from '../store/useStore'
+import { api, type SpeechStats } from '../sync/api'
+import { flushSpeech } from '../lib/speechLog'
+import { recognitionSupported } from '../lib/speech'
 
 /*
  * Mistakes notebook: the words and sentences you've forgotten most (each "Again" after you'd
  * learned it counts), worst first, with how well you remember each one right now. "Drill
  * these" runs a Weak words practice with exactly these items.
- * Everything comes from your review history, which is already on this device.
+ * Everything comes from your review history, which is already on this device. Below it,
+ * "Tricky to say": what you find hard to pronounce, from your speaking scores.
  */
 
 const MAX_DRILL = 20
@@ -108,6 +112,52 @@ export function MistakesPage() {
           </ul>
         </>
       )}
+      <TrickyToSay lang={lang} onPractise={(ids) => { if (lang !== activeLang) setActiveLang(lang); navigate(`/practice/speaking?items=${encodeURIComponent(ids.join(','))}`) }} />
     </div>
+  )
+}
+
+/** Things you find hard to say (server/speech.ts), with your speaking score. */
+function TrickyToSay({ lang, onPractise }: { lang: LangCode; onPractise: (ids: string[]) => void }) {
+  const account = useStore((s) => s.account)
+  const [stats, setStats] = useState<SpeechStats | null>(null)
+  useEffect(() => {
+    if (!account) return
+    let live = true
+    void flushSpeech().then(() => api.speechStats(lang)).then((r) => live && setStats(r), () => {})
+    return () => { live = false }
+  }, [account, lang])
+  if (!stats || !stats.attempts) return null
+  const course = COURSES[lang]
+  const list = stats.tricky.map((t) => ({ ...t, item: getItem(t.itemId) })).filter((t): t is typeof t & { item: Item } => !!t.item)
+  return (
+    <section className="stack-sm" data-testid="tricky-to-say">
+      <div className="row">
+        <h3 className="grow">🎤 Tricky to say</h3>
+        <span className="pill" title="Average match over your last 30 days of speaking">Speaking score {Math.round(stats.avg * 100)}% · {stats.attempts} tries</span>
+      </div>
+      {list.length === 0 ? <p className="small muted">Nothing tricky right now: everything you’ve said lately came out well.</p> : (
+        <>
+          <ul className="mistake-list">
+            {list.map((t) => (
+              <li key={t.itemId} data-testid="tricky">
+                <AudioButton text={t.item.target} lang={course.bcp47} />
+                <div className="mistake-text">
+                  <TargetText item={t.item} course={course} size="sm" />
+                  <span className="muted small">{t.item.meaning}</span>
+                </div>
+                <div className="mistake-stats">
+                  <strong>{Math.round(t.avg * 100)}% match</strong>
+                  <span className="muted small">{t.attempts} {t.attempts === 1 ? 'try' : 'tries'} · best {Math.round(t.best * 100)}%</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {recognitionSupported() && (
+            <div><button className="btn" onClick={() => onPractise(list.slice(0, MAX_DRILL).map((t) => t.itemId))} data-testid="tricky-practise"><Icon name="mic" size={16} /> Practise saying these</button></div>
+          )}
+        </>
+      )}
+    </section>
   )
 }

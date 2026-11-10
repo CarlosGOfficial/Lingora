@@ -1,3 +1,4 @@
+export type SpeechStats = { attempts: number; avg: number; passed: number; tricky: { itemId: string; lang: string; attempts: number; avg: number; best: number; last: number; close: boolean }[] }
 import type { DeckDetail, DeckSummary, MyDeck } from '../social/decks'
 import type { TrophyCaseData } from '../components/TrophyCase'
 import type { ChatReply, ChatRequest } from '../chat/types'
@@ -69,6 +70,8 @@ export const api = {
   studyRooms: () => request<any>('/study'),
   decks: (q: { lang?: string; q?: string; sort?: string }) => request<DeckSummary[]>(`/decks?${new URLSearchParams(Object.entries(q).filter(([, v]) => v) as [string, string][])}`),
   myDecks: () => request<MyDeck[]>('/decks/mine'),
+  speech: (scores: { id: string; itemId: string; lang: string; score: number; at: number }[]) => request<{ saved: number }>('/speech', { body: { scores } }),
+  speechStats: (lang?: string) => request<SpeechStats>(`/speech${lang ? `?lang=${lang}` : ''}`),
   deck: (id: number, code?: string | null) => request<DeckDetail>(`/decks/${id}${code ? `?code=${encodeURIComponent(code)}` : ''}`),
   createDeck: (body: unknown) => request<DeckDetail>('/decks', { body }),
   saveDeck: (id: number, body: unknown) => request<DeckDetail>(`/decks/${id}`, { method: 'PUT', body }),

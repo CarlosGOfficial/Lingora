@@ -22,7 +22,7 @@ export interface GoalStats {
 
 /* ---------- Daily quests ---------- */
 
-export type QuestMetric = 'xp' | 'reviews' | 'good_reviews' | 'lessons' | 'readings' | 'stories'
+export type QuestMetric = 'xp' | 'reviews' | 'good_reviews' | 'lessons' | 'readings' | 'stories' | 'speak'
 export interface QuestDef { id: string; metric: QuestMetric; target: number; coins: number; text: string }
 export const QUEST_POOL: QuestDef[] = [
   { id: 'xp30', metric: 'xp', target: 30, coins: 30, text: 'Earn 30 XP' },
@@ -33,6 +33,8 @@ export const QUEST_POOL: QuestDef[] = [
   { id: 'lesson2', metric: 'lessons', target: 2, coins: 45, text: 'Finish 2 lessons' },
   { id: 'read1', metric: 'readings', target: 1, coins: 35, text: 'Read a graded reader' },
   { id: 'story1', metric: 'stories', target: 1, coins: 40, text: 'Finish a story' },
+  // Only offered to people who've used speaking before (see questsFor).
+  { id: 'speak10', metric: 'speak', target: 10, coins: 40, text: 'Say 10 things right out loud' },
 ]
 export const DAILY_QUEST_COUNT = 3
 export type QuestView = QuestDef & { progress: number; claimed: boolean; day: string }
@@ -42,9 +44,10 @@ function hash(s: string) {
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
   return h >>> 0
 }
-/** Today's quests for someone: picked from the pool, the same on every device. */
-export const questsFor = (userId: string, day: string) =>
-  [...QUEST_POOL].sort((a, b) => hash(`${userId}:${day}:${a.id}`) - hash(`${userId}:${day}:${b.id}`)).slice(0, DAILY_QUEST_COUNT)
+/** Today's quests for someone: picked from the pool, the same on every device. The speaking
+ * quest is only for people who spoke in the two weeks before today (so it's doable). */
+export const questsFor = (userId: string, day: string, opts: { speaker?: boolean } = {}) =>
+  QUEST_POOL.filter((q) => q.metric !== 'speak' || opts.speaker).sort((a, b) => hash(`${userId}:${day}:${a.id}`) - hash(`${userId}:${day}:${b.id}`)).slice(0, DAILY_QUEST_COUNT)
 
 /* ---------- Achievements ---------- */
 

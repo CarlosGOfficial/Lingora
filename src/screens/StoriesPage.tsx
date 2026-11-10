@@ -1,3 +1,4 @@
+import { recognitionSupported } from '../lib/speech'
 import { useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { AudioButton } from '../components/AudioButton'
@@ -87,6 +88,7 @@ export function StoryPage() {
       <header className="session-top">
         <button className="icon-btn" aria-label="Close" onClick={() => navigate('/stories')}><Icon name="x" /></button>
         <h1 className="reading-title" lang={course.bcp47}>{story.emoji} {story.title}</h1>
+        {recognitionSupported() && <Link to={`/read-aloud/story/${encodeURIComponent(story.id)}`} className="btn small btn-ghost" title="Read the story aloud, line by line" data-testid="read-aloud"><Icon name="mic" size={16} /></Link>}
         <ReadingToggle course={course} />
       </header>
       <div className="reading-body">

@@ -1,3 +1,4 @@
+import { registerSpeechRoutes } from './speech'
 import { registerDeckRoutes } from './decks'
 import { registerTrophyRoutes } from './trophies'
 import { findLesson, findReading } from '../src/content'
@@ -310,6 +311,7 @@ registerBanterRoutes(app)
 registerGoalRoutes(app)
 registerTrophyRoutes(app)
 registerDeckRoutes(app)
+registerSpeechRoutes(app)
 registerPushRoutes(app)
 
 /* ---------- Saved themes (the same table and shape as Wordle Unlimited) ---------- */

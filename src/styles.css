@@ -1087,6 +1087,7 @@ input[type='range'] { accent-color: var(--accent); }
 .speak-result.close .meter > div { background: var(--warn); }
 .speak-result.off .meter > div { background: var(--danger); }
 .speak-units { font-size: 1.6rem; font-weight: 600; line-height: 1.4; display: flex; flex-wrap: wrap; justify-content: center; }
+.speak-units.spaced { column-gap: .3em; }
 .speak-units .hit { color: var(--success); }
 .speak-units .miss { color: var(--danger); text-decoration: underline wavy color-mix(in srgb, var(--danger) 60%, transparent); text-underline-offset: 5px; }
 .speak-units span { animation: chip-in .3s var(--ease-spring) both; }
@@ -1838,3 +1839,8 @@ input[type='range'] { accent-color: var(--accent); }
 .star-btn { border: 0; background: none; font-size: 1.4rem; color: var(--border); cursor: pointer; padding: 0 2px; }
 .star-btn.on { color: #f5b301; }
 textarea.text-input { font: inherit; resize: vertical; }
+
+/* Speaking modes (components/exercises/Speak.tsx) */
+.speak-say { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.speak-meaning { font-size: 1.5rem; font-weight: 800; }
+.speak-hidden { font-size: 1.6rem; letter-spacing: .2em; color: var(--muted); padding: 6px 0; }

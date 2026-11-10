@@ -4,7 +4,7 @@ import { CompleteScreen } from '../components/CompleteScreen'
 import { SessionRunner, type SessionSummary } from '../components/SessionRunner'
 import { COURSES, getItem } from '../content'
 import type { Item } from '../content/types'
-import { buildPractice, effectiveOpts, type PracticeMode } from '../engine/exercises'
+import { buildPractice, effectiveOpts, type Exercise, type PracticeMode } from '../engine/exercises'
 import { sessionXp, type XpBreakdown } from '../engine/xp'
 import { useStore } from '../store/useStore'
 
@@ -22,6 +22,11 @@ export function PracticeSession() {
     if (mode === 'listening' && !opts.listening) return []
     if (mode === 'writing' && course.lang === 'pt') return []
     // From the mistakes notebook: exactly these items (ones you've studied), in this order.
+    // …or from "Tricky to say": these items, said out loud.
+    if (mode === 'speaking' && search.get('items')) {
+      const tricky = (search.get('items') ?? '').split(',').map((id) => getItem(id)).filter((x): x is Item => !!x).slice(0, 20)
+      if (tricky.length) return tricky.map((item): Exercise => ({ type: 'speak', item, mode: 'shadow' }))
+    }
     const chosen = mode === 'weak' ? (search.get('items') ?? '').split(',').filter((id) => progress[activeLang].cards[id]).slice(0, 20) : []
     const items = (chosen.length >= 4 ? chosen : Object.values(progress[activeLang].cards).sort((a, b) => a.stability - b.stability).map((c) => c.itemId))
       .map((id) => getItem(id))
