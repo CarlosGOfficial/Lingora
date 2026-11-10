@@ -1822,3 +1822,19 @@ input[type='range'] { accent-color: var(--accent); }
 .trophy-app { text-transform: uppercase; letter-spacing: .06em; font-weight: 700; font-size: .7rem; }
 .trophy-detail { padding: 10px 12px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); }
 .trophy-detail-icon { font-size: 1.8rem; }
+
+/* Community decks (screens/DecksPage.tsx) */
+.deck-list { display: flex; flex-direction: column; gap: 8px; }
+.deck-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); text-decoration: none; color: inherit; }
+.deck-row:hover { border-color: var(--accent); }
+.deck-head { display: flex; gap: 14px; align-items: flex-start; }
+.deck-head h2 { margin: 0; }
+.deck-cards { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.deck-cards li { display: flex; align-items: baseline; gap: 12px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.deck-target { font-size: 1.15rem; font-weight: 700; min-width: 4em; }
+.deck-edit-rows { display: flex; flex-direction: column; gap: 6px; }
+.deck-edit-row { display: flex; gap: 6px; align-items: center; }
+.deck-edit-row .text-input { flex: 1; min-width: 0; }
+.star-btn { border: 0; background: none; font-size: 1.4rem; color: var(--border); cursor: pointer; padding: 0 2px; }
+.star-btn.on { color: #f5b301; }
+textarea.text-input { font: inherit; resize: vertical; }

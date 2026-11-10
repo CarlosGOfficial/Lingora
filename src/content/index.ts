@@ -57,7 +57,15 @@ const itemIndex = new Map<string, Item>()
 for (const c of Object.values(COURSES)) for (const it of allItems(c)) itemIndex.set(it.id, it)
 
 export function getItem(id: string): Item | undefined {
-  return itemIndex.get(id)
+  return itemIndex.get(id) ?? extraItems.get(id)
+}
+
+/** Items from outside the courses (community decks you own or follow: src/social/decks.ts). */
+const extraItems = new Map<string, Item>()
+/** Replace the extra items (called whenever your decks change). */
+export function setExtraItems(items: Item[]) {
+  extraItems.clear()
+  for (const it of items) extraItems.set(it.id, it)
 }
 
 export function allLessons(course: Course): { unit: Unit; lesson: Lesson }[] {

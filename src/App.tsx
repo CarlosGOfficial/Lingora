@@ -27,6 +27,7 @@ import { ShopPage } from './screens/ShopPage'
 import { ThemeStudioPage } from './screens/ThemeStudioPage'
 import { UnitReviewPage } from './screens/UnitReviewPage'
 import { UserProfilePage } from './screens/UserProfilePage'
+import { DeckEditor, DeckLearn, DeckPage, DecksPage } from './screens/DecksPage'
 import { ThemeApplier } from './theme/ThemeApplier'
 import { useStore } from './store/useStore'
 import { NotificationsWatcher } from './social/NotificationsWatcher'
@@ -92,12 +93,17 @@ function MainApp() {
         <Route path="/conversation" element={<ConversationPage />} />
         <Route path="/section-test/:index" element={<Remount param="index"><SectionTestPage /></Remount>} />
         <Route path="/practice/:mode" element={<Remount param="mode"><PracticeSession /></Remount>} />
+        <Route path="/decks/:id/learn" element={<Remount param="id"><DeckLearn /></Remount>} />
         <Route element={<Shell />}>
           <Route index element={<Home />} />
           <Route path="/review" element={<ReviewPage />} />
           <Route path="/sections" element={<SectionsPage />} />
           <Route path="/practice" element={<PracticePage />} />
           <Route path="/mistakes" element={<MistakesPage />} />
+          <Route path="/decks" element={<DecksPage />} />
+          <Route path="/decks/new" element={<DeckEditor />} />
+          <Route path="/decks/:id" element={<Remount param="id"><DeckPage /></Remount>} />
+          <Route path="/decks/:id/edit" element={<Remount param="id"><DeckEditor /></Remount>} />
           <Route path="/duels" element={<DuelsPage />} />
           <Route path="/study" element={<StudyPage />} />
           <Route path="/season" element={<SeasonPage />} />

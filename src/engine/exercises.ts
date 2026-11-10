@@ -204,3 +204,10 @@ export function exerciseItems(ex: Exercise): Item[] {
   if (ex.type === 'grammar') return []
   return ex.type === 'match' ? ex.items : [ex.item]
 }
+
+/** Learning new community-deck cards: meet each one, then recognise it both ways (and match a few). */
+export function buildDeckLearn(items: Item[], pool: Item[]): Exercise[] {
+  const intros: Exercise[] = items.map((item) => ({ type: 'intro', item }))
+  const quiz = shuffle(items.flatMap((item) => [mcq(item, pool, 'target'), mcq(item, pool, 'meaning')]))
+  return [...intros, ...(items.length >= 4 ? [{ type: 'match', items: sample(items, 4) } as Exercise] : []), ...quiz]
+}

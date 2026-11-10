@@ -10,6 +10,8 @@ import { generateFriendCode, isValidCode, lookupFriend, normalizeCode, sampleFri
 import { emptyOutbox, type Account, type Outbox } from '../sync/types'
 import { DEFAULT_CUSTOM_THEME, type CustomTheme, type ThemeChoice } from '../theme/themes'
 import { bump, emptyStreak, reconcile, type Streak } from './streak'
+import { setExtraItems } from '../content'
+import { itemsOfDecks, type MyDeck } from '../social/decks'
 
 export interface CardRecord extends SrsCard {
   itemId: string
@@ -77,6 +79,9 @@ interface State {
   appearance: Appearance
   /** Using Lingora without an account (only offered when the server can't hold accounts). */
   guest: boolean
+  /** Community decks you own or follow (server/decks.ts), so their cards can be learned and reviewed. */
+  decks: MyDeck[]
+  setDecks(decks: MyDeck[]): void
 
   onboard(name: string, lang: LangCode, dailyGoal: number): void
   setGuest(guest: boolean): void
@@ -130,6 +135,7 @@ const initial = () => ({
     equipped: { title: 'tt_learner', celebration: 'ce_confetti' },
   } as Appearance,
   guest: false,
+  decks: [] as MyDeck[],
 })
 
 export const useStore = create<State>()(
@@ -143,6 +149,11 @@ export const useStore = create<State>()(
 
       setGuest(guest) {
         set({ guest })
+      },
+
+      setDecks(decks) {
+        setExtraItems(itemsOfDecks(decks))
+        set({ decks })
       },
 
       setActiveLang(lang) {
@@ -293,6 +304,8 @@ export const useStore = create<State>()(
       name: STORAGE_KEY,
       version: 2,
       // v1 stored an outbox without purchases/claims.
+      // Deck cards are looked up by id like course items; register them as soon as they load.
+      onRehydrateStorage: () => (state) => { if (state?.decks) setExtraItems(itemsOfDecks(state.decks)) },
       migrate: (persisted) => {
         const p = persisted as Partial<State>
         return { ...p, outbox: { ...emptyOutbox(), ...(p.outbox ?? {}) } } as State

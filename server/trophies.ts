@@ -17,6 +17,7 @@ const values = (rows: (string | number)[][]) => rows.map((r) => `(${r.map((v) =>
 const DIV_TIER = (d: number): TrophyTier => (d >= 7 ? 'special' : d >= 6 ? 'gold' : d >= 4 ? 'silver' : 'bronze')
 const DUEL_RATINGS: [number, TrophyTier][] = [[1200, 'bronze'], [1400, 'silver'], [1600, 'gold']]
 const LESSON_MILESTONES: [number, TrophyTier][] = [[10, 'bronze'], [50, 'silver'], [150, 'gold']]
+const DECK_MAKER: [number, TrophyTier][] = [[25, 'silver'], [100, 'gold']]
 const FLAGS: Record<string, string> = { zh: '🇨🇳', ja: '🇯🇵', pt: '🇧🇷' }
 const courses = Object.values(COURSES).map((c) => ({ lang: c.lang as string, name: c.name, flag: FLAGS[c.lang] ?? '🗺️' }))
 
@@ -42,6 +43,12 @@ export const LINGORA_TROPHIES: TrophyRule[] = [
       from lingora_completions join (values ${values(LESSON_MILESTONES.map(([n]) => [n]))}) as m(n) on true
       where kind = 'lesson' and ${mine('user_id')}
       group by user_id, lang, m.n having count(*) >= m.n`,
+  },
+  {
+    defs: DECK_MAKER.map(([n, tier]) => ({ key: `deckmaker:${n}`, name: n >= 100 ? 'Deck legend' : 'Deck maker', icon: n >= 100 ? '🗂️' : '🃏', tier, detail: `Make a community deck that ${n} people follow.` })),
+    earned: `select d.owner_id as user_id, 'deckmaker:' || m.n as key, now() as earned_at
+      from (select owner_id, max((select count(*) from lingora_deck_subs s where s.deck_id = x.id)) as subs from lingora_decks x where ${mine('owner_id')} group by owner_id) d
+      join (values ${values(DECK_MAKER.map(([n]) => [n]))}) as m(n) on d.subs >= m.n`,
   },
 ]
 

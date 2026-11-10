@@ -67,6 +67,7 @@ export function syncNow(): Promise<void> {
         lastSyncedAt: Date.now(),
         syncError: null,
       })
+      void refreshDecks()
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) useStore.setState({ account: null, syncError: 'Signed out — please sign in again.' })
       else useStore.setState({ syncError: (e as Error).message })
@@ -210,4 +211,10 @@ export function startAutoSync(): () => void {
     unsub()
     window.removeEventListener('focus', onFocus)
   }
+}
+
+/** Your own and followed community decks (their cards are learnable items). */
+export async function refreshDecks() {
+  if (!useStore.getState().account) return
+  try { useStore.getState().setDecks(await api.myDecks()) } catch { /* offline: keep what we have */ }
 }

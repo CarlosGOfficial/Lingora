@@ -1,3 +1,4 @@
+import { registerDeckRoutes } from './decks'
 import { registerTrophyRoutes } from './trophies'
 import { findLesson, findReading } from '../src/content'
 import { findStory } from '../src/content/stories'
@@ -70,11 +71,11 @@ async function isAdmin(userId: string | null): Promise<boolean> {
 }
 
 async function account(userId: string): Promise<Account> {
-  const rows = await db()`select u.id, u.username, u.first_name, u.pin, u.password_hash is not null as has_password, p.prefs
+  const rows = await db()`select u.id, u.username, u.first_name, u.pin, u.password_hash is not null as has_password, u.is_admin, p.prefs
     from users u left join lingora_profiles p on p.user_id = u.id where u.id = ${userId}`
   if (!rows.length) fail(401, 'Account not found.')
   const r = rows[0]
-  return { id: r.id, username: r.username ?? r.first_name ?? 'Learner', prefs: (r.prefs ?? {}) as Prefs, pin: r.pin ?? null, hasPassword: !!r.has_password }
+  return { id: r.id, username: r.username ?? r.first_name ?? 'Learner', prefs: (r.prefs ?? {}) as Prefs, pin: r.pin ?? null, hasPassword: !!r.has_password, ...(r.is_admin ? { isAdmin: true } : {}) }
 }
 
 /** Every account needs a unique 4-digit PIN in Wordle Unlimited (its PIN login). */
@@ -308,6 +309,7 @@ registerCrossEventRoutes(app)
 registerBanterRoutes(app)
 registerGoalRoutes(app)
 registerTrophyRoutes(app)
+registerDeckRoutes(app)
 registerPushRoutes(app)
 
 /* ---------- Saved themes (the same table and shape as Wordle Unlimited) ---------- */

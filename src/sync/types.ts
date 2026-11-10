@@ -62,6 +62,8 @@ export interface Account {
   pin?: string | null
   /** False for PIN-only accounts (they can add a password in Wordle Unlimited or Banter). */
   hasPassword?: boolean
+  /** Site admins (they can take down community decks). */
+  isAdmin?: boolean
 }
 
 export interface SyncRequest {

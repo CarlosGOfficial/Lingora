@@ -49,6 +49,13 @@ export function PracticePage() {
             <span className="muted small">Role-play real situations by typing or speaking, using only what you’ve learned.</span>
           </Link>
         )}
+        <Link to="/decks" className="mode-card" data-testid="decks-card">
+          <span className="mode-icon">
+            <Icon name="layers" size={24} />
+          </span>
+          <strong>Community decks</strong>
+          <span className="muted small">Flashcard decks made by learners, or your own. Follow one and its cards join your reviews.</span>
+        </Link>
         <Link to="/duels" className="mode-card" data-testid="duels-card">
           <span className="mode-icon">
             <Icon name="bolt" size={24} />
