@@ -6,6 +6,7 @@ import { normalize } from '../lib/answer'
 import { kanaVariants, toneVariants } from '../lib/pronounce'
 import { sample, shuffle } from '../lib/random'
 import { hasVoiceFor } from '../lib/speech'
+import { isTrainerItem, trainerPool } from '../trainer'
 
 export type Exercise =
   | { type: 'intro'; item: Item }
@@ -155,6 +156,11 @@ export function buildUnitReview(unit: Unit, course: Course, opts: Opts): Exercis
 export function buildReview(cards: { card: CardRecord; item: Item }[], course: Course, opts: Opts): Exercise[] {
   const pool = allItems(course)
   return shuffle(cards).map(({ card, item }) => {
+    // Trainer cards (verb forms, measure words): type it, or pick it from its own forms.
+    if (isTrainerItem(item.id)) {
+      const choice = () => mcq(item, trainerPool(item), 'meaning')
+      return card.reps <= 1 || Math.random() < 0.3 ? choice() : { type: 'type', item }
+    }
     const options: (() => Exercise)[] = []
     if (card.reps <= 1) {
       options.push(() => mcq(item, pool, 'target'), () => mcq(item, pool, 'meaning'))

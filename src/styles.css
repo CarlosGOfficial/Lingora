@@ -1862,3 +1862,24 @@ textarea.text-input { font: inherit; resize: vertical; }
 .recap-link { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 18px; color: #fff; text-decoration: none; background: linear-gradient(120deg, #7c3aed, #db2777); }
 .recap-link .small { color: rgba(255,255,255,.9); }
 .recap-link-icon { font-size: 1.6rem; }
+
+/* ---------- Verb & grammar trainer (/trainer) ---------- */
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.trainer-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.trainer-word { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); overflow: hidden; }
+.trainer-word.open { border-color: var(--accent); }
+.trainer-word-head { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; flex-wrap: wrap; }
+.trainer-word-title { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; }
+.trainer-tag { margin-left: 8px; font-size: .72rem; }
+.trainer-table { padding: 4px 14px 12px; display: flex; flex-direction: column; gap: 10px; }
+.conj-scroll { overflow-x: auto; }
+.conj { border-collapse: collapse; font-size: .88rem; min-width: 100%; }
+.conj th, .conj td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.conj thead th { font-size: .74rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.conj tbody th { color: var(--muted); font-weight: 600; }
+.form { border-radius: 6px; padding: 1px 5px; }
+.form.is-learned { background: color-mix(in srgb, var(--success, #16a34a) 18%, transparent); }
+.form.is-seen { background: var(--accent-soft); }
+.form-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.form-list li { display: grid; grid-template-columns: minmax(110px, 160px) 1fr auto; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.form-list li.muted { display: block; border: 0; }

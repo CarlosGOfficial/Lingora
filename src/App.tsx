@@ -1,4 +1,5 @@
 import { MistakesPage } from './screens/MistakesPage'
+import { TrainerPage } from './screens/TrainerPage'
 import { DuelPage, DuelsPage } from './screens/DuelsPage'
 import { StudyPage, StudyRoomPage } from './screens/StudyPage'
 import { SeasonPage } from './screens/SeasonPage'
@@ -104,6 +105,7 @@ function MainApp() {
           <Route path="/sections" element={<SectionsPage />} />
           <Route path="/practice" element={<PracticePage />} />
           <Route path="/mistakes" element={<MistakesPage />} />
+          <Route path="/trainer" element={<TrainerPage />} />
           <Route path="/decks" element={<DecksPage />} />
           <Route path="/decks/new" element={<DeckEditor />} />
           <Route path="/decks/:id" element={<Remount param="id"><DeckPage /></Remount>} />

@@ -70,6 +70,13 @@ export function PracticePage() {
           <strong>Study rooms</strong>
           <span className="muted small">Study with friends on a shared focus timer, with a room chat and a Banter call.</span>
         </Link>
+        <Link to="/trainer" className="mode-card" data-testid="trainer-card">
+          <span className="mode-icon">
+            <Icon name="pencil" size={24} />
+          </span>
+          <strong>{course.lang === 'zh' ? 'Measure words' : 'Verb trainer'}</strong>
+          <span className="muted small">{course.lang === 'pt' ? 'Conjugate every tense, from falo to falaria. Tables and drills.' : course.lang === 'ja' ? 'Verb and adjective forms: ます, ない, た, て and more.' : '一本书, 两只猫: which measure word goes with which noun.'}</span>
+        </Link>
         <Link to="/mistakes" className="mode-card" data-testid="mistakes-card">
           <span className="mode-icon">
             <Icon name="flag" size={24} />

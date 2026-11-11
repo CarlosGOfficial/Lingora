@@ -17,6 +17,7 @@ import { zhMoreUnitsGrammar } from './zh-units-more'
 import { zhSectionUnitsGrammar } from './zh-units-sections'
 import type { Course, GrammarPoint, Item, LangCode, Lesson, Reading, Unit } from './types'
 import { zh } from './zh'
+import { trainerItems } from '../trainer'
 
 export const COURSES: Record<LangCode, Course> = { zh, ja, pt }
 export const LANG_CODES: LangCode[] = ['zh', 'ja', 'pt']
@@ -57,16 +58,22 @@ const itemIndex = new Map<string, Item>()
 for (const c of Object.values(COURSES)) for (const it of allItems(c)) itemIndex.set(it.id, it)
 
 export function getItem(id: string): Item | undefined {
-  return itemIndex.get(id) ?? extraItems.get(id)
+  const hit = itemIndex.get(id)
+  if (hit) return hit
+  for (const items of extraItems.values()) { const x = items.get(id); if (x) return x }
+  return undefined
 }
 
-/** Items from outside the courses (community decks you own or follow: src/social/decks.ts). */
-const extraItems = new Map<string, Item>()
-/** Replace the extra items (called whenever your decks change). */
-export function setExtraItems(items: Item[]) {
-  extraItems.clear()
-  for (const it of items) extraItems.set(it.id, it)
+/**
+ * Items from outside the courses, by source: "decks" (community decks you own or follow,
+ * src/social/decks.ts) and "trainer" (verb forms and measure words, src/trainer).
+ */
+const extraItems = new Map<string, Map<string, Item>>()
+/** Replace one source's extra items (decks: whenever your decks change). */
+export function setExtraItems(items: Item[], source = 'decks') {
+  extraItems.set(source, new Map(items.map((it) => [it.id, it])))
 }
+setExtraItems(trainerItems(), 'trainer')
 
 export function allLessons(course: Course): { unit: Unit; lesson: Lesson }[] {
   return course.units.flatMap((unit) => unit.lessons.map((lesson) => ({ unit, lesson })))
