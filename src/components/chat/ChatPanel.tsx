@@ -11,7 +11,7 @@ import {
   voiceNote,
   sharedFile,
   sticker,
-  challengeCard,
+  challengeCard, recapCard,
   dailyResult,
   fileSize,
   inviteCode,
@@ -41,6 +41,10 @@ import { useStore } from '../../store/useStore'
 // Pieces shared by friend chats and group chats (a port of Wordle Unlimited's ChatParts).
 
 export type Member = ChatPerson & { online?: boolean; lastReadId?: number }
+
+/** 'October 2026' (or '2026' for a year in review). */
+const recapLabel = (period: string) => new Date(Date.UTC(Number(period.slice(0, 4)), period.length > 4 ? Number(period.slice(5, 7)) - 1 : 0, 1))
+  .toLocaleDateString(undefined, period.length > 4 ? { month: 'long', year: 'numeric', timeZone: 'UTC' } : { year: 'numeric', timeZone: 'UTC' })
 
 export function Avatar({ person, online, size = 'md' }: { person?: Pick<ChatPerson, 'username' | 'avatar'> | null; online?: boolean; size?: 'xs' | 'sm' | 'md' | 'big' }) {
   const [broken, setBroken] = useState(false)
@@ -174,6 +178,8 @@ export function MessageBody({ content, mine, sender, me, onMediaLoad }: { conten
       </a>
     )
   }
+  const recap = recapCard(content)
+  if (recap) return <WordleCard icon="📊" title={`${recapLabel(recap.period)} recap`} text={`🟩 ${recap.wins} Wordle wins · 📚 ${recap.xp} XP · 💬 ${recap.messages} messages`} href={`/recap/${recap.period}`} action="See yours" />
   const challenge = challengeCard(content)
   if (challenge) {
     const href = links?.wordleUrl ? `${links.wordleUrl}/challenge/${challenge.id}` : undefined

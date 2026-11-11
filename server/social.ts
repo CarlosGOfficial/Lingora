@@ -1,3 +1,4 @@
+import { recapFor } from './ops'
 import { BLOCKED_MESSAGE, blockedBetween, blockedByMe } from './blocks'
 import { ACHIEVEMENTS } from '../src/content/goals'
 import type { Hono } from 'hono'
@@ -185,6 +186,12 @@ async function chatContent(s: Sql, me: string, body: Row): Promise<string> {
     return img ? `IMG:${img.id}` : fail(400, 'That picture didn’t upload. Try again.')
   }
   if (typeof body?.gif === 'string') return GIPHY_ID_RE.test(body.gif) ? `GIF:${body.gif}` : fail(400, 'That GIF isn’t available.')
+  if (typeof body?.recap === 'string') {
+    // Your monthly recap as a card (built here from your own numbers, so nobody can fake one).
+    const r = await recapFor(me, body.recap)
+    if (!r) fail(400, 'No recap for that month.')
+    return `RECAP:${r!.period}:${r!.wordle.won}:${r!.lingora.xp}:${r!.banter.messages}`
+  }
   const content = str(body?.content).trim()
   if (!content) fail(400, 'Type a message first.')
   if (content.length > MAX_MESSAGE) fail(400, `Messages can be up to ${MAX_MESSAGE} characters.`)

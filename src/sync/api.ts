@@ -1,5 +1,6 @@
 export type SpeechStats = { attempts: number; avg: number; passed: number; tricky: { itemId: string; lang: string; attempts: number; avg: number; best: number; last: number; close: boolean }[] }
 import type { Crew } from '../screens/CrewPage'
+import type { Recap } from '../components/RecapStory'
 import type { DeckDetail, DeckSummary, MyDeck } from '../social/decks'
 import type { TrophyCaseData } from '../components/TrophyCase'
 import type { ChatReply, ChatRequest } from '../chat/types'
@@ -72,6 +73,7 @@ export const api = {
   decks: (q: { lang?: string; q?: string; sort?: string }) => request<DeckSummary[]>(`/decks?${new URLSearchParams(Object.entries(q).filter(([, v]) => v) as [string, string][])}`),
   myDecks: () => request<MyDeck[]>('/decks/mine'),
   crew: () => request<Crew | null>('/crew'),
+  recap: (period: string) => request<Recap>(`/recap/${period}`),
   crewWars: (on: boolean) => request<Crew>('/crew/wars', { method: 'PUT', body: { on } }),
   crewStudy: () => request<{ id: number }>('/crew/study', { method: 'POST' }),
   speech: (scores: { id: string; itemId: string; lang: string; score: number; at: number }[]) => request<{ saved: number }>('/speech', { body: { scores } }),

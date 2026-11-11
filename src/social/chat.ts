@@ -24,6 +24,11 @@ export const GIPHY_ID_RE = /^[A-Za-z0-9]{4,64}$/
 // Typed text that starts with one of these gets a leading space, so only real cards render.
 // (VOICE:, POLL:, FILE: and STICKER: come from Banter: a voice message, a poll you vote on in
 // Banter, a file to download and a server sticker.)
+/** A shared monthly recap: RECAP:<YYYY-MM or YYYY>:<Wordle wins>:<Lingora XP>:<messages>. */
+export function recapCard(content: string): { period: string; wins: number; xp: number; messages: number } | null {
+  const m = /^RECAP:(\d{4}(?:-\d{2})?):(\d{1,7}):(\d{1,8}):(\d{1,8})$/.exec(content)
+  return m ? { period: m[1], wins: Number(m[2]), xp: Number(m[3]), messages: Number(m[4]) } : null
+}
 /**
  * A Wordle Unlimited friend challenge: CHALLENGE:<id> (play it), or the result someone sends
  * back, CHALLENGE:<id>:<guesses or X>:<rows of G/Y/X joined by '/'>.
@@ -33,7 +38,7 @@ export function challengeCard(content: string): { id: string; result: { score: s
   if (!m) return null
   return { id: m[1], result: m[2] ? { score: m[2], rows: m[3].split('/').filter((r) => /^[GYX]{5}$/.test(r)) } : null }
 }
-const CARD_RE = /^(INVITE|PARTY|CLIP|IMG|GIF|VOICE|POLL|FILE|STICKER|DAILY|CHALLENGE):/
+const CARD_RE = /^(INVITE|PARTY|CLIP|IMG|GIF|VOICE|POLL|FILE|STICKER|DAILY|CHALLENGE|RECAP):/
 /** A Wordle Daily Challenge result: DAILY:<n>:<score>:<rows of G/Y/X joined by "/">. */
 export function dailyResult(content: string): { number: number; score: string; rows: string[] } | null {
   const m = /^DAILY:(\d{1,5}):([1-6X]):([GYX/]{5,41})$/.exec(content)
@@ -86,6 +91,7 @@ export function messagePreview(content: string): string {
   if (file) return `📎 ${file.name}`
   const daily = dailyResult(content)
   if (daily) return `📅 Wordle Daily #${daily.number} ${daily.score}/6`
+  if (recapCard(content)) return '📊 A monthly recap'
   const challenge = challengeCard(content)
   if (challenge) return challenge.result ? `🧩 Wordle challenge ${challenge.result.score}/6` : '🧩 A Wordle word challenge'
   const st = sticker(content)

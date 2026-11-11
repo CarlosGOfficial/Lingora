@@ -28,6 +28,7 @@ import { ThemeStudioPage } from './screens/ThemeStudioPage'
 import { UnitReviewPage } from './screens/UnitReviewPage'
 import { UserProfilePage } from './screens/UserProfilePage'
 import { CrewPage } from './screens/CrewPage'
+import { RecapPage } from './screens/RecapPage'
 import { ReadAloudPage } from './screens/ReadAloudPage'
 import { DeckEditor, DeckLearn, DeckPage, DecksPage } from './screens/DecksPage'
 import { ThemeApplier } from './theme/ThemeApplier'
@@ -110,6 +111,8 @@ function MainApp() {
           <Route path="/duels" element={<DuelsPage />} />
           <Route path="/study" element={<StudyPage />} />
           <Route path="/crew" element={<CrewPage />} />
+          <Route path="/recap" element={<RecapPage />} />
+          <Route path="/recap/:period" element={<Remount param="period"><RecapPage /></Remount>} />
           <Route path="/season" element={<SeasonPage />} />
           <Route path="/study/:id" element={<Remount param="id"><StudyRoomPage /></Remount>} />
           <Route path="/duels/:id" element={<Remount param="id"><DuelPage /></Remount>} />

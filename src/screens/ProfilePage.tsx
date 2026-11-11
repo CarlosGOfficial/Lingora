@@ -42,6 +42,12 @@ export function ProfilePage() {
   return (
     <div className="stack">
       <PageHeader icon="user" title="Profile" subtitle="Your progress, settings and account." />
+      {s.account && (
+        <Link to="/recap" className="recap-link" data-testid="profile-recap">
+          <span className="recap-link-icon">📊</span>
+          <span className="grow person-text"><strong>Your recap</strong><span className="small">Your month across Lingora, Wordle and Banter.</span></span>
+        </Link>
+      )}
 
       <div className="profile-head">
         <span className="avatar big">{s.name[0]?.toUpperCase()}</span>

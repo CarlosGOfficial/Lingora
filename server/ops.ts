@@ -198,6 +198,11 @@ export const OPS_SCHEMA = [
     created_at timestamptz not null default now()
   )`,
   `create index if not exists ops_crew_wars_week on ops.crew_wars(week)`,
+  // Monthly recaps: which months' "your recap is ready" notifications have gone out.
+  `create table if not exists ops.recap_runs (
+    period text primary key,
+    sent_at timestamptz not null default now()
+  )`,
   `create table if not exists ops.smoke_runs (
     id bigserial primary key,
     trigger text not null,
@@ -315,6 +320,8 @@ export async function startOps(app: OpsApp, run: OpsQuery) {
   setInterval(() => void heartbeat(), 60_000).unref();
   setInterval(() => void crewTick(), 5 * 60_000).unref();
   setTimeout(() => void crewTick(), 20_000).unref();
+  setInterval(() => void recapTick(), 30 * 60_000).unref();
+  setTimeout(() => void recapTick(), 40_000).unref();
   setInterval(() => void flushErrors(), 10_000).unref();
 }
 
@@ -1190,5 +1197,106 @@ export async function crewTick() {
     }
   } catch (err: any) {
     original.warn("[ops] Crew tick:", err?.message);
+  }
+}
+
+/* ---------- Monthly recap ("Wrapped") ---------- */
+/*
+ * Your month (or year) across the three apps, worked out from what they already keep.
+ * Only you can see your own; sharing it sends a small RECAP: card with four numbers.
+ * On the first days of a month, everyone who did something last month is told it's ready.
+ */
+export type Recap = {
+  period: string; kind: "month" | "year"; from: string; to: string; name: string; empty: boolean; activeDays: number;
+  wordle: { played: number; won: number; bestWord: { word: string; guesses: number } | null; favoriteMode: string | null; dailies: number; dailyWins: number };
+  lingora: { xp: number; lessons: number; newWords: number; reviews: number; activeDays: number; topLang: string | null };
+  banter: { messages: number; topServer: { name: string; messages: number } | null; topEmoji: string | null; reactions: number };
+  topFriend: { id: string; name: string; messages: number } | null;
+  trophies: { name: string; icon: string; tier: string }[];
+};
+export const RECAP_PERIOD_RE = /^\d{4}(-(0[1-9]|1[0-2]))?$/;
+
+/** The period's UTC range, or null if it's not a past or current month or year. */
+export function recapRange(period: string): { from: Date; to: Date; kind: "month" | "year" } | null {
+  if (!RECAP_PERIOD_RE.test(period)) return null;
+  const [y, m] = period.split("-").map(Number);
+  const from = new Date(Date.UTC(y, m ? m - 1 : 0, 1)), to = new Date(Date.UTC(m ? y : y + 1, m ? m : 0, 1));
+  if (from.getTime() > Date.now() || y < 2024) return null;
+  return { from, to, kind: m ? "month" : "year" };
+}
+
+export async function recapFor(userId: string, period: string): Promise<Recap | null> {
+  const range = recapRange(period);
+  if (!query || !range) return null;
+  const f = range.from.toISOString(), t = range.to.toISOString(), fm = range.from.getTime(), tm = range.to.getTime();
+  const q1 = async (sql: string, params: unknown[]) => (await query!(sql, params).catch((err) => { original.warn("[ops] Recap:", err?.message); return []; }))[0] ?? {};
+  const qa = async (sql: string, params: unknown[]) => query!(sql, params).catch((err) => { original.warn("[ops] Recap:", err?.message); return []; });
+  const inRange = (col: string) => `${col} >= ($2::timestamptz at time zone 'UTC') and ${col} < ($3::timestamptz at time zone 'UTC')`;
+  const [w, best, mode, daily, l, newWords, topLang, msgs, server, emoji, friend, trophies, days, u] = await Promise.all([
+    q1(`select count(*)::int as played, count(*) filter (where won)::int as won from round_stats where user_id = $1 and ${inRange("created_at")}`, [userId, f, t]),
+    q1(`select word, guesses from round_stats where user_id = $1 and won and ${inRange("created_at")} order by guesses, solve_ms nulls last limit 1`, [userId, f, t]),
+    q1(`select mode, count(*) as n from round_stats where user_id = $1 and ${inRange("created_at")} group by mode order by n desc limit 1`, [userId, f, t]),
+    q1(`select count(*)::int as n, count(*) filter (where won)::int as won from daily_results where user_id = $1 and finished and ${inRange("finished_at")}`, [userId, f, t]),
+    q1(`select coalesce(sum(xp), 0)::int as xp, count(distinct day)::int as days from lingora_xp_events where user_id = $1 and at_ms >= $2 and at_ms < $3`, [userId, fm, tm]),
+    q1(`select count(*)::int as n from (select min(at_ms) as first from lingora_review_logs where user_id = $1 group by item_id) x where first >= $2 and first < $3`, [userId, fm, tm]),
+    q1(`select lang, sum(xp) as xp from lingora_xp_events where user_id = $1 and at_ms >= $2 and at_ms < $3 group by lang order by xp desc limit 1`, [userId, fm, tm]),
+    q1(`select (select count(*) from chat.messages where from_user_id = $1 and deleted_at is null and ${inRange("created_at")})::int as channel,
+        (select count(*) from direct_messages where from_user_id = $1 and ${inRange("created_at")})::int as dm,
+        (select count(*) from group_messages where from_user_id = $1 and ${inRange("created_at")})::int as grp,
+        (select count(*) from lingora_review_logs where user_id = $1 and at_ms >= $4 and at_ms < $5)::int as reviews,
+        (select count(*) from lingora_completions where user_id = $1 and kind = 'lesson' and at_ms >= $4 and at_ms < $5)::int as lessons`, [userId, f, t, fm, tm]),
+    q1(`select sv.name, count(*)::int as n from chat.messages m join chat.channels c on c.id = m.channel_id join chat.servers sv on sv.id = c.server_id
+        where m.from_user_id = $1 and m.deleted_at is null and ${inRange("m.created_at")} group by sv.name order by n desc limit 1`, [userId, f, t]),
+    q1(`select emoji, count(*)::int as n, (select count(*) from message_reactions where user_id = $1 and ${inRange("created_at")})::int as total
+        from message_reactions where user_id = $1 and ${inRange("created_at")} group by emoji order by n desc limit 1`, [userId, f, t]),
+    q1(`select d.to_user_id as id, coalesce(u.username, u.first_name, 'Friend') as name, count(*)::int as n from direct_messages d join users u on u.id = d.to_user_id
+        where d.from_user_id = $1 and ${inRange("d.created_at")} group by 1, 2 order by n desc limit 1`, [userId, f, t]),
+    qa(`select name, icon, tier from ops.trophies where user_id = $1 and earned_at >= $2 and earned_at < $3 order by earned_at limit 12`, [userId, f, t]),
+    q1(`select count(distinct d)::int as n from (
+          select (created_at at time zone 'UTC')::date as d from round_stats where user_id = $1 and ${inRange("created_at")}
+          union select (to_timestamp(at_ms / 1000.0) at time zone 'UTC')::date from lingora_xp_events where user_id = $1 and at_ms >= $4 and at_ms < $5
+          union select created_at::date from chat.messages where from_user_id = $1 and ${inRange("created_at")}
+          union select created_at::date from direct_messages where from_user_id = $1 and ${inRange("created_at")}) x`, [userId, f, t, fm, tm]),
+    q1(`select coalesce(username, first_name, 'You') as name from users where id = $1`, [userId]),
+  ]);
+  const messages = (msgs.channel ?? 0) + (msgs.dm ?? 0) + (msgs.grp ?? 0);
+  const r: Recap = {
+    period, kind: range.kind, from: f, to: t, name: u.name ?? "You", activeDays: days.n ?? 0, empty: false,
+    wordle: { played: w.played ?? 0, won: w.won ?? 0, bestWord: best.word ? { word: best.word, guesses: best.guesses } : null, favoriteMode: mode.mode ?? null, dailies: daily.n ?? 0, dailyWins: daily.won ?? 0 },
+    lingora: { xp: l.xp ?? 0, lessons: msgs.lessons ?? 0, newWords: newWords.n ?? 0, reviews: msgs.reviews ?? 0, activeDays: l.days ?? 0, topLang: topLang.lang ?? null },
+    banter: { messages, topServer: server.name ? { name: server.name, messages: server.n } : null, topEmoji: emoji.emoji ?? null, reactions: emoji.total ?? 0 },
+    topFriend: friend.id ? { id: friend.id, name: friend.name, messages: friend.n } : null,
+    trophies: trophies.map((x: any) => ({ name: x.name, icon: x.icon, tier: x.tier })),
+  };
+  r.empty = !r.wordle.played && !r.lingora.xp && !r.banter.messages && !r.trophies.length;
+  return r;
+}
+
+/** "Your recap is ready", early in a month (and a year in review in January), once each. */
+export async function recapTick(now = new Date()) {
+  if (!query || now.getUTCDate() > 7) return;
+  const last = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  const periods = [last.toISOString().slice(0, 7), ...(now.getUTCMonth() === 0 ? [String(now.getUTCFullYear() - 1)] : [])];
+  for (const period of periods) {
+    try {
+      const [claimed] = await query(`insert into ops.recap_runs (period) values ($1) on conflict do nothing returning period`, [period]);
+      if (!claimed) continue;
+      const range = recapRange(period)!;
+      const label = range.kind === "year" ? period : range.from.toLocaleString("en", { month: "long", timeZone: "UTC" });
+      const path = `/recap/${period}`;
+      await query(
+        `insert into ops.inbox (user_id, kind, title, body, url, tag, from_app)
+         select u, 'chat', $4, $5, $6::jsonb, $7, $8 from (
+           select user_id as u from round_stats where created_at >= ($1::timestamptz at time zone 'UTC') and created_at < ($2::timestamptz at time zone 'UTC')
+           union select user_id from lingora_xp_events where at_ms >= $3 and at_ms < $9
+           union select from_user_id from chat.messages where from_user_id is not null and created_at >= ($1::timestamptz at time zone 'UTC') and created_at < ($2::timestamptz at time zone 'UTC')
+         ) active join users on users.id = active.u`,
+        [range.from.toISOString(), range.to.toISOString(), range.from.getTime(),
+          range.kind === "year" ? `🎉 Your ${period} in review is ready` : `📊 Your ${label} recap is ready`,
+          "Your wins, words and chats across Wordle Unlimited, Lingora and Banter. Tap to see it.",
+          JSON.stringify({ wordle: path, banter: path, lingora: path }), `recap:${period}`, thisApp, range.to.getTime()]);
+    } catch (err: any) {
+      original.warn("[ops] Recap tick:", err?.message);
+    }
   }
 }

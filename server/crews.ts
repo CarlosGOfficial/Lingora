@@ -1,10 +1,16 @@
 import type { Hono } from 'hono'
 import { fail, rateLimit, requireUser, type Env } from './http'
-import { crewView, setCrewWars } from './ops'
+import { crewView, recapFor, setCrewWars } from './ops'
 import { crewStudyRoom } from './study'
 
 /* Crews (server/ops.ts): your Wordle clan, its weekly score across the apps, and crew wars. */
 export function registerCrewRoutes(app: Hono<Env>) {
+  // Your monthly (YYYY-MM) or yearly (YYYY) recap: only yours.
+  app.get('/recap/:period', requireUser, async (c) => {
+    const r = await recapFor(c.get('userId'), c.req.param('period'))
+    if (!r) fail(404, 'No recap for that month.')
+    return c.json(r)
+  })
   app.get('/crew', requireUser, async (c) => c.json(await crewView(c.get('userId'))))
   // { on }: owners and officers
   app.put('/crew/wars', requireUser, async (c) => {
