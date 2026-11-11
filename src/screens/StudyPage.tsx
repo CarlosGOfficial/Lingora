@@ -63,6 +63,7 @@ export function StudyPage() {
     <div className="stack" data-testid="study-page">
       <PageHeader icon="book" title="Study rooms" subtitle="Study together on a shared focus timer, see everyone’s progress, and chat or call between sessions." />
       {error && <div className="cta-card calm" role="alert">{error}</div>}
+      <Link to="/crew" className="btn small" data-testid="crew-link">⚔️ Your crew &amp; its study room</Link>
       {!!data?.friends.length && (
         <section className="stack-sm"><h3>Friends studying now</h3>
           <ul className="duel-friends">{data.friends.map((r) => row(r, <button className="btn small btn-primary" onClick={() => join(r.code)}>Join</button>))}</ul>

@@ -1,3 +1,4 @@
+import { registerCrewRoutes } from './crews'
 import { registerSpeechRoutes } from './speech'
 import { registerDeckRoutes } from './decks'
 import { registerTrophyRoutes } from './trophies'
@@ -312,6 +313,7 @@ registerGoalRoutes(app)
 registerTrophyRoutes(app)
 registerDeckRoutes(app)
 registerSpeechRoutes(app)
+registerCrewRoutes(app)
 registerPushRoutes(app)
 
 /* ---------- Saved themes (the same table and shape as Wordle Unlimited) ---------- */

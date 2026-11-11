@@ -33,6 +33,9 @@ export const STUDY_SCHEMA = [
     last_seen timestamptz not null default now(),
     primary key (room_id, user_id)
   )`,
+  // A crew's (Wordle clan's) own room: any member of the clan can come in.
+  `alter table lingora_study_rooms add column if not exists clan_id integer`,
+  `create unique index if not exists lingora_study_rooms_clan on lingora_study_rooms (clan_id) where clan_id is not null`,
 ]
 
 const MAX_MEMBERS = 12, MAX_ROOMS = 5
@@ -43,8 +46,27 @@ const newCode = () => Array.from({ length: 6 }, () => CODE_CHARS[randomInt(CODE_
 
 async function roomFor(s: Sql, id: number, uid: string) {
   const [r] = await s`select r.* from lingora_study_rooms r join lingora_study_members m on m.room_id = r.id and m.user_id = ${uid} where r.id = ${id}`
-  if (!r) fail(404, 'Study room not found.')
-  return r
+  if (r) return r
+  // A crew room: members of the crew come straight in.
+  const [crew] = await s`select r.* from lingora_study_rooms r join clan_members cm on cm.clan_id = r.clan_id and cm.user_id = ${uid} where r.id = ${id}`
+  if (!crew) fail(404, 'Study room not found.')
+  await s`insert into lingora_study_members (room_id, user_id) values (${crew.id}, ${uid}) on conflict do nothing`
+  return crew
+}
+
+/** Your crew's study room (made the first time someone opens it). */
+export async function crewStudyRoom(uid: string): Promise<number> {
+  const s = db()
+  const [c] = await s`select c.id, c.name, c.tag, c.owner_id, c.group_id from clan_members m join clans c on c.id = m.clan_id where m.user_id = ${uid}`
+  if (!c) fail(404, 'You’re not in a crew. Join a clan in Wordle Unlimited.')
+  let [room] = await s`select id from lingora_study_rooms where clan_id = ${c.id}`
+  for (let i = 0; i < 5 && !room; i++) {
+    ;[room] = await s`insert into lingora_study_rooms (code, name, owner_id, group_id, clan_id) values (${newCode()}, ${`[${c.tag}] ${c.name}`.slice(0, 40)}, ${c.owner_id}, ${c.group_id}, ${c.id})
+      on conflict do nothing returning id`
+    if (!room) [room] = await s`select id from lingora_study_rooms where clan_id = ${c.id}`
+  }
+  await s`insert into lingora_study_members (room_id, user_id) values (${room.id}, ${uid}) on conflict do nothing`
+  return room.id
 }
 
 async function view(s: Sql, r: any, uid: string) {
@@ -55,7 +77,7 @@ async function view(s: Sql, r: any, uid: string) {
     from lingora_study_members m join users u on u.id = m.user_id where m.room_id = ${r.id}
     order by online desc, xp desc, m.joined_at`
   return {
-    id: r.id, code: r.code, name: r.name, owner: r.owner_id === uid, groupId: r.group_id,
+    id: r.id, code: r.code, name: r.name, owner: r.owner_id === uid && !r.clan_id, crew: !!r.clan_id, groupId: r.group_id,
     timer: r.timer_started_at ? { focus: r.focus, rest: r.rest, startedAt: new Date(r.timer_started_at).getTime() } : null,
     serverNow: Date.now(),
     members: members.map((m) => ({ id: m.user_id, name: m.name, online: m.online, xp: m.xp, reviews: m.reviews, joinedAt: m.joined_at, me: m.user_id === uid })),
@@ -167,7 +189,7 @@ export function registerStudyRoutes(app: Hono<Env>) {
   app.post('/study/:id/leave', requireUser, async (c) => {
     const s = db(), uid = c.get('userId')
     const r = await roomFor(s, Number(c.req.param('id')) || 0, uid)
-    if (r.owner_id === uid) await s`delete from lingora_study_rooms where id = ${r.id}`
+    if (r.owner_id === uid && !r.clan_id) await s`delete from lingora_study_rooms where id = ${r.id}`
     else await s`delete from lingora_study_members where room_id = ${r.id} and user_id = ${uid}`
     return c.json({ ok: true })
   })

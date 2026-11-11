@@ -177,6 +177,27 @@ export const OPS_SCHEMA = [
     user_id text primary key references users(id) on delete cascade,
     ids text[] not null default '{}'
   )`,
+  // Crews (Wordle clans, in all three apps): who opted into weekly wars, and the wars.
+  `create table if not exists ops.crew_settings (
+    clan_id integer primary key,
+    wars boolean not null default false
+  )`,
+  `create table if not exists ops.crew_war_weeks (
+    week text primary key,
+    paired_at timestamptz not null default now()
+  )`,
+  `create table if not exists ops.crew_wars (
+    id serial primary key,
+    week text not null,
+    clan_a integer not null,
+    clan_b integer not null,
+    score_a integer,
+    score_b integer,
+    winner integer,
+    settled_at timestamptz,
+    created_at timestamptz not null default now()
+  )`,
+  `create index if not exists ops_crew_wars_week on ops.crew_wars(week)`,
   `create table if not exists ops.smoke_runs (
     id bigserial primary key,
     trigger text not null,
@@ -292,6 +313,8 @@ export async function startOps(app: OpsApp, run: OpsQuery) {
   console.error = (...args: unknown[]) => { original.error(...args); trackError(args); };
   void heartbeat();
   setInterval(() => void heartbeat(), 60_000).unref();
+  setInterval(() => void crewTick(), 5 * 60_000).unref();
+  setTimeout(() => void crewTick(), 20_000).unref();
   setInterval(() => void flushErrors(), 10_000).unref();
 }
 
@@ -992,4 +1015,180 @@ export async function pinTrophies(userId: string, ids: unknown): Promise<string[
      on conflict (user_id) do update set ids = excluded.ids returning ids`,
     [userId, want]);
   return r?.ids ?? [];
+}
+
+/* ---------- Crews: Wordle clans, in all three apps ---------- */
+/*
+ * A crew is a Wordle clan (same members, roles, tag and privacy). Its weekly score adds
+ * up what members did in each app: Wordle XP (round_stats), Lingora XP (xp events) and
+ * activity in the clan's linked Banter server (4 points a message, up to 25 messages a
+ * day each). Clans that opt in are paired each Monday for a crew war; at the end of the
+ * week the higher score wins: a banner for the next week, coins for every member who
+ * played, and a trophy. Pairing and settling are each claimed in one statement, so any
+ * app can run the job and it still happens once.
+ */
+export const CREW_WAR_COINS = 100;
+export const CREW_MSG_POINTS = 4, CREW_MSG_DAY_CAP = 25;
+export type CrewBrief = { id: number; name: string; tag: string; emoji: string; color: string };
+export type CrewMember = { id: string; name: string; avatar: string | null; role: string; wordle: number; lingora: number; banter: number; total: number };
+export type CrewWar = { id: number; opponent: CrewBrief; mine: number; theirs: number; endsAt: string; theirMembers: number };
+export type CrewView = CrewBrief & {
+  isPrivate: boolean; groupId: number | null; banterInvite: string | null; studyRoomId: number | null;
+  week: string; total: number; parts: { wordle: number; lingora: number; banter: number };
+  members: CrewMember[]; myRole: string; wars: boolean; war: CrewWar | null;
+  lastWar: { opponent: CrewBrief; mine: number; theirs: number; won: boolean | null } | null; banner: boolean;
+};
+
+/** Monday (UTC) of the week holding `d`, as YYYY-MM-DD. */
+export function crewWeek(d = new Date()) {
+  const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  x.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7));
+  return x.toISOString().slice(0, 10);
+}
+const weekRange = (week: string) => { const from = Date.parse(`${week}T00:00:00Z`); return { from, to: from + 7 * 86_400_000 }; };
+const prevWeek = (week: string) => new Date(Date.parse(`${week}T00:00:00Z`) - 7 * 86_400_000).toISOString().slice(0, 10);
+
+/** Each member's points per app for some clans over a week. */
+async function crewScores(clanIds: number[], week: string): Promise<{ user_id: string; clan_id: number; wordle: number; lingora: number; banter: number }[]> {
+  if (!query || !clanIds.length) return [];
+  const { from, to } = weekRange(week);
+  const f = new Date(from).toISOString(), t = new Date(to).toISOString();
+  return query(
+    `with m as (select user_id, clan_id from clan_members where clan_id = any($1::int[])),
+     w as (select s.user_id, sum(s.xp)::int as v from round_stats s join m on m.user_id = s.user_id
+       where s.created_at >= ($2::timestamptz at time zone 'UTC') and s.created_at < ($3::timestamptz at time zone 'UTC') group by 1),
+     l as (select x.user_id, sum(x.xp)::int as v from lingora_xp_events x join m on m.user_id = x.user_id
+       where x.at_ms >= $4 and x.at_ms < $5 group by 1),
+     b as (select d.user_id, sum(least($7, d.n) * $6)::int as v from (
+       select msg.from_user_id as user_id, date_trunc('day', msg.created_at) as day, count(*) as n
+       from chat.messages msg join chat.channels ch on ch.id = msg.channel_id join chat.servers sv on sv.id = ch.server_id
+       join clans c on c.banter_invite = sv.invite_code join m on m.user_id = msg.from_user_id and m.clan_id = c.id
+       where msg.deleted_at is null and msg.created_at >= ($2::timestamptz at time zone 'UTC') and msg.created_at < ($3::timestamptz at time zone 'UTC')
+       group by 1, 2) d group by 1)
+     select m.user_id, m.clan_id, coalesce(w.v, 0)::int as wordle, coalesce(l.v, 0)::int as lingora, coalesce(b.v, 0)::int as banter
+     from m left join w on w.user_id = m.user_id left join l on l.user_id = m.user_id left join b on b.user_id = m.user_id`,
+    [clanIds, f, t, from, to, CREW_MSG_POINTS, CREW_MSG_DAY_CAP],
+  ).catch((err) => { original.warn("[ops] Crew scores:", err?.message); return []; });
+}
+const totalOf = (rows: { wordle: number; lingora: number; banter: number }[]) => rows.reduce((n, r) => n + r.wordle + r.lingora + r.banter, 0);
+
+async function briefs(ids: number[]): Promise<Map<number, CrewBrief>> {
+  if (!query || !ids.length) return new Map();
+  const rows = await query(`select id, name, tag, emoji, color from clans where id = any($1::int[])`, [ids]).catch(() => []);
+  return new Map(rows.map((r) => [r.id, { id: r.id, name: r.name, tag: r.tag, emoji: r.emoji, color: r.color }]));
+}
+
+/** Your crew (your Wordle clan) with this week's score, or null if you're not in one. */
+export async function crewView(userId: string): Promise<CrewView | null> {
+  if (!query) return null;
+  const [c] = await query(
+    `select c.*, m.role, coalesce(s.wars, false) as wars,
+       (select id from lingora_study_rooms r where r.clan_id = c.id limit 1) as study_room_id
+     from clan_members m join clans c on c.id = m.clan_id left join ops.crew_settings s on s.clan_id = c.id where m.user_id = $1`, [userId],
+  ).catch(async () => (await query!(`select c.*, m.role, false as wars, null::int as study_room_id from clan_members m join clans c on c.id = m.clan_id where m.user_id = $1`, [userId]).catch(() => [])));
+  if (!c) return null;
+  const week = crewWeek();
+  const scores = await crewScores([c.id], week);
+  const people = await query(`select id, username, first_name, profile_image_url from users where id = any($1::text[])`, [scores.map((r) => r.user_id)]).catch(() => []);
+  const roles = new Map((await query(`select user_id, role from clan_members where clan_id = $1`, [c.id]).catch(() => [])).map((r) => [r.user_id, r.role]));
+  const byId = new Map(people.map((p) => [p.id, p]));
+  const members: CrewMember[] = scores.map((r) => {
+    const p = byId.get(r.user_id);
+    return { id: r.user_id, name: p?.username || p?.first_name || "Player", avatar: p?.profile_image_url ?? null, role: roles.get(r.user_id) ?? "member",
+      wordle: r.wordle, lingora: r.lingora, banter: r.banter, total: r.wordle + r.lingora + r.banter };
+  }).sort((a, b) => b.total - a.total);
+  const parts = { wordle: 0, lingora: 0, banter: 0 };
+  for (const m of members) { parts.wordle += m.wordle; parts.lingora += m.lingora; parts.banter += m.banter; }
+
+  let war: CrewWar | null = null;
+  const [w] = await query(`select * from ops.crew_wars where week = $1 and (clan_a = $2 or clan_b = $2)`, [week, c.id]).catch(() => []);
+  if (w) {
+    const other = w.clan_a === c.id ? w.clan_b : w.clan_a;
+    const theirs = await crewScores([other], week);
+    const opp = (await briefs([other])).get(other);
+    if (opp) war = { id: w.id, opponent: opp, mine: totalOf(scores), theirs: totalOf(theirs), endsAt: new Date(weekRange(week).to).toISOString(), theirMembers: theirs.length };
+  }
+  let lastWar: CrewView["lastWar"] = null;
+  const [lw] = await query(`select * from ops.crew_wars where week = $1 and (clan_a = $2 or clan_b = $2) and settled_at is not null`, [prevWeek(week), c.id]).catch(() => []);
+  if (lw) {
+    const other = lw.clan_a === c.id ? lw.clan_b : lw.clan_a, mineA = lw.clan_a === c.id;
+    const opp = (await briefs([other])).get(other) ?? { id: other, name: "A crew that disbanded", tag: "?", emoji: "🛡️", color: "#888888" };
+    lastWar = { opponent: opp, mine: mineA ? lw.score_a : lw.score_b, theirs: mineA ? lw.score_b : lw.score_a, won: lw.winner == null ? null : lw.winner === c.id };
+  }
+  return {
+    id: c.id, name: c.name, tag: c.tag, emoji: c.emoji, color: c.color, isPrivate: !!c.is_private, groupId: c.group_id ?? null,
+    banterInvite: c.banter_invite ?? null, studyRoomId: c.study_room_id ?? null, week, total: totalOf(scores), parts, members,
+    myRole: c.role, wars: !!c.wars, war, lastWar, banner: !!lastWar?.won,
+  };
+}
+
+/** Owners and officers: take part in weekly crew wars (from next Monday's pairing). */
+export async function setCrewWars(userId: string, on: boolean): Promise<{ ok: true } | { error: string }> {
+  if (!query) return { error: "Not available." };
+  const [m] = await query(`select clan_id, role from clan_members where user_id = $1`, [userId]);
+  if (!m) return { error: "You're not in a crew." };
+  if (m.role !== "owner" && m.role !== "officer") return { error: "Only the crew's owner and officers can do that." };
+  await query(`insert into ops.crew_settings (clan_id, wars) values ($1, $2) on conflict (clan_id) do update set wars = $2`, [m.clan_id, !!on]);
+  return { ok: true };
+}
+
+/** Pair this week's wars (once), and settle last week's (each once). */
+export async function crewTick() {
+  if (!query) return;
+  try {
+    const week = crewWeek();
+    // Settle any finished war: the claim (settled_at) and the result are one update.
+    const open = await query(`select * from ops.crew_wars where week < $1 and settled_at is null`, [week]);
+    for (const w of open) {
+      const scores = await crewScores([w.clan_a, w.clan_b], w.week);
+      const a = totalOf(scores.filter((r) => r.clan_id === w.clan_a)), b = totalOf(scores.filter((r) => r.clan_id === w.clan_b));
+      const winner = a === b ? null : a > b ? w.clan_a : w.clan_b;
+      const [done] = await query(`update ops.crew_wars set score_a = $2, score_b = $3, winner = $4, settled_at = now() where id = $1 and settled_at is null returning id`, [w.id, a, b, winner]);
+      if (!done) continue;
+      const names = await briefs([w.clan_a, w.clan_b]);
+      for (const clan of [w.clan_a, w.clan_b]) {
+        const mine = scores.filter((r) => r.clan_id === clan), opp = names.get(clan === w.clan_a ? w.clan_b : w.clan_a);
+        const won = winner === clan, played = mine.filter((r) => r.wordle + r.lingora + r.banter > 0).map((r) => r.user_id);
+        if (won && played.length) {
+          await query(`update users set coins = coins + $2 where id = any($1::text[])`, [played, CREW_WAR_COINS]);
+          await query(
+            `insert into ops.trophies (user_id, app, key, name, icon, tier, detail)
+             select u, 'wordle', 'crewwar:' || $2::text, 'Crew war won', '⚔️', 'silver', $3 from unnest($1::text[]) as u on conflict do nothing`,
+            [played, w.id, `With ${names.get(clan)?.name ?? "your crew"} against ${opp?.name ?? "another crew"} (week of ${w.week}).`]);
+        }
+        void recordInbox(mine.map((r) => r.user_id), {
+          kind: "wordle", tag: `crewwar:${w.id}`,
+          title: winner == null ? "⚔️ Crew war: a draw!" : won ? "⚔️ Your crew won the war!" : "⚔️ Your crew lost the war",
+          body: `${totalOf(mine)} to ${totalOf(scores.filter((r) => r.clan_id !== clan))} against ${opp?.name ?? "the other crew"}.${won && played.length ? ` +${CREW_WAR_COINS} coins each for everyone who played.` : ""}`,
+          url: { wordle: "/clans", banter: "/crew", lingora: "/crew" },
+        });
+      }
+    }
+    // Pair this week: whoever claims the week does it.
+    const [claimed] = await query(`insert into ops.crew_war_weeks (week) values ($1) on conflict do nothing returning week`, [week]);
+    if (!claimed) return;
+    const clans = await query(
+      `select c.id, (select count(*) from clan_members m where m.clan_id = c.id)::int as n
+       from clans c join ops.crew_settings s on s.clan_id = c.id and s.wars where (select count(*) from clan_members m where m.clan_id = c.id) >= 2`);
+    if (clans.length < 2) return;
+    const last = await crewScores(clans.map((c) => c.id), prevWeek(week));
+    const strength = new Map(clans.map((c) => [c.id, totalOf(last.filter((r) => r.clan_id === c.id)) / Math.max(1, c.n)]));
+    // Similar size first, then last week's points per member; neighbours fight.
+    const order = [...clans].sort((x, y) => Math.round(x.n / 3) - Math.round(y.n / 3) || strength.get(y.id)! - strength.get(x.id)!);
+    const pairs: [number, number][] = [];
+    for (let i = 0; i + 1 < order.length; i += 2) pairs.push([order[i].id, order[i + 1].id]);
+    if (pairs.length) await query(`insert into ops.crew_wars (week, clan_a, clan_b) select $1, a, b from unnest($2::int[], $3::int[]) as p(a, b)`, [week, pairs.map((p) => p[0]), pairs.map((p) => p[1])]);
+    for (const [a, b] of pairs) {
+      const names = await briefs([a, b]);
+      const members = await query(`select user_id, clan_id from clan_members where clan_id = any($1::int[])`, [[a, b]]);
+      for (const clan of [a, b]) {
+        void recordInbox(members.filter((m) => m.clan_id === clan).map((m) => m.user_id), {
+          kind: "wordle", tag: `crewwar:${week}`, title: "⚔️ A crew war starts!", body: `This week: ${names.get(a)?.name} vs ${names.get(b)?.name}. Wordle wins, Lingora XP and chat in your crew's Banter server all count.`,
+          url: { wordle: "/clans", banter: "/crew", lingora: "/crew" },
+        });
+      }
+    }
+  } catch (err: any) {
+    original.warn("[ops] Crew tick:", err?.message);
+  }
 }
