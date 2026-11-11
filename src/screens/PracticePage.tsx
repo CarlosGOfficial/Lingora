@@ -70,6 +70,15 @@ export function PracticePage() {
           <strong>Study rooms</strong>
           <span className="muted small">Study with friends on a shared focus timer, with a room chat and a Banter call.</span>
         </Link>
+        {course.lang !== 'pt' && (
+          <Link to="/characters" className="mode-card" data-testid="characters-card">
+            <span className="mode-icon">
+              <Icon name="book" size={24} />
+            </span>
+            <strong>{course.lang === 'zh' ? 'Hanzi explorer' : 'Kanji explorer'}</strong>
+            <span className="muted small">Every character in your course: radicals, parts, stroke order and the words you know.</span>
+          </Link>
+        )}
         <Link to="/trainer" className="mode-card" data-testid="trainer-card">
           <span className="mode-icon">
             <Icon name="pencil" size={24} />

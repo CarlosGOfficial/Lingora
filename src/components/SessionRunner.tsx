@@ -8,6 +8,7 @@ import type { Rating } from '../lib/fsrs'
 import { AudioButton } from './AudioButton'
 import { Icon } from './Icon'
 import { TargetText } from './TargetText'
+import { CharChips } from '../screens/CharactersPage'
 import { Cloze } from './exercises/Cloze'
 import { Grammar } from './exercises/Grammar'
 import { ReadingDrill } from './exercises/ReadingDrill'
@@ -184,11 +185,12 @@ export function SessionRunner({ exercises, course, onFinish, onExit }: Props) {
                   <TargetText item={item} course={course} size="sm" reading />
                   <span className="small">· {item.meaning}</span>
                   <AudioButton text={item.target} lang={course.bcp47} />
+                  {item.kind === 'word' && <CharChips text={item.target} lang={course.lang} />}
                 </div>
               )}
               {item && feedback.quality === 'correct' && (
                 <div className="feedback-answer small">
-                  <span lang={course.bcp47}>{item.target}</span> — {item.meaning}
+                  <span lang={course.bcp47}>{item.target}</span> — {item.meaning} {item.kind === 'word' && <CharChips text={item.target} lang={course.lang} />}
                 </div>
               )}
             </div>

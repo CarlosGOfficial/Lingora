@@ -12,6 +12,7 @@ import { useStore, type CardRecord } from '../store/useStore'
 import { api, type SpeechStats } from '../sync/api'
 import { flushSpeech } from '../lib/speechLog'
 import { recognitionSupported } from '../lib/speech'
+import { CharChips } from './CharactersPage'
 
 /*
  * Mistakes notebook: the words and sentences you've forgotten most (each "Again" after you'd
@@ -99,6 +100,7 @@ export function MistakesPage() {
                 <div className="mistake-text">
                   <TargetText item={item} course={course} size="sm" />
                   <span className="muted small">{item.meaning}</span>
+                  {item.kind === 'word' && <CharChips text={item.target} lang={lang} />}
                 </div>
                 <div className="mistake-stats">
                   <strong>
