@@ -199,6 +199,13 @@ export const OPS_SCHEMA = [
   )`,
   `create index if not exists ops_crew_wars_week on ops.crew_wars(week)`,
   // Monthly recaps: which months' "your recap is ready" notifications have gone out.
+  `create table if not exists ops.trio_claims (
+    user_id text not null,
+    day date not null,
+    coins integer not null,
+    created_at timestamptz not null default now(),
+    primary key (user_id, day)
+  )`,
   `create table if not exists ops.recap_runs (
     period text primary key,
     sent_at timestamptz not null default now()
@@ -1299,4 +1306,109 @@ export async function recapTick(now = new Date()) {
       original.warn("[ops] Recap tick:", err?.message);
     }
   }
+}
+
+/* ---------- Today, across the apps ---------- */
+
+/*
+ * One look at your day in all three apps (shown on each app's home): what you've done
+ * in Wordle, Lingora and Banter today, what's waiting, your crew war and the season.
+ * The "daily trio": do something in each app in one (UTC) day and claim coins, more
+ * every 7th day in a row. A claim is one statement that checks all three again.
+ */
+export const TRIO_COINS = 40, TRIO_WEEK_BONUS = 120;
+export type Today = {
+  day: string;
+  wordle: { rounds: number; wins: number; dailyDone: boolean; dailyWon: boolean; dailyStreak: number };
+  lingora: { xp: number; lessons: number; reviews: number; streak: number };
+  banter: { sent: number; unread: number; notifications: number };
+  trio: { wordle: boolean; lingora: boolean; banter: boolean; claimed: boolean; coins: number; streak: number };
+  crew: { name: string; emoji: string; total: number; war: { opponent: string; mine: number; theirs: number; endsAt: string } | null } | null;
+  season: { name: string; tier: number; xp: number; tierXp: number; today: number; dayCap: number } | null;
+  coins: number;
+  urls: Record<OpsApp, string | null>;
+};
+
+const utcDay = (d = new Date()) => d.toISOString().slice(0, 10);
+/** How many days in a row end today (or yesterday, if today isn't in yet). Days are YYYY-MM-DD, any order. */
+export function dayStreak(days: string[], today = utcDay()): number {
+  const set = new Set(days);
+  const back = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  let d = set.has(today) ? today : back(today), n = 0;
+  while (set.has(d)) { n++; d = back(d); }
+  return n;
+}
+/** What the trio pays on the `n`th day in a row. */
+export const trioCoins = (n: number) => (n > 0 && n % 7 === 0 ? TRIO_WEEK_BONUS : TRIO_COINS);
+
+const TRIO_DONE = {
+  wordle: `(exists (select 1 from round_stats where user_id = $1 and created_at >= (now() at time zone 'UTC')::date)
+    or exists (select 1 from daily_results where user_id = $1 and finished and finished_at >= (now() at time zone 'UTC')::date))`,
+  lingora: `exists (select 1 from lingora_xp_events where user_id = $1 and at_ms >= extract(epoch from (now() at time zone 'UTC')::date::timestamp at time zone 'UTC') * 1000)`,
+  banter: `(exists (select 1 from direct_messages where from_user_id = $1 and created_at >= (now() at time zone 'UTC')::date)
+    or exists (select 1 from group_messages where from_user_id = $1 and created_at >= (now() at time zone 'UTC')::date)
+    or exists (select 1 from chat.messages where from_user_id = $1 and created_at >= (now() at time zone 'UTC')::date))`,
+};
+
+export async function todayFor(userId: string): Promise<Today | null> {
+  if (!query) return null;
+  const q1 = async (sql: string, params: unknown[] = [userId]) => (await query!(sql, params).catch((err) => { original.warn("[ops] Today:", err?.message); return []; }))[0] ?? {};
+  const qa = async (sql: string, params: unknown[] = [userId]) => query!(sql, params).catch((err) => { original.warn("[ops] Today:", err?.message); return []; });
+  const today = `(now() at time zone 'UTC')::date`;
+  const [w, d, dDays, l, lDays, b, done, claims, me, crew, season, urls] = await Promise.all([
+    q1(`select count(*)::int as rounds, count(*) filter (where won)::int as wins from round_stats where user_id = $1 and created_at >= ${today}`),
+    q1(`select finished, won from daily_results where user_id = $1 and day = to_char(${today}, 'YYYY-MM-DD')`),
+    qa(`select day from daily_results where user_id = $1 and finished order by day desc limit 400`),
+    q1(`select coalesce(sum(x.xp), 0)::int as xp,
+        (select count(*) from lingora_completions where user_id = $1 and kind = 'lesson' and at_ms >= extract(epoch from ${today}::timestamp at time zone 'UTC') * 1000)::int as lessons,
+        (select count(*) from lingora_review_logs where user_id = $1 and at_ms >= extract(epoch from ${today}::timestamp at time zone 'UTC') * 1000)::int as reviews
+        from lingora_xp_events x where x.user_id = $1 and x.at_ms >= extract(epoch from ${today}::timestamp at time zone 'UTC') * 1000`),
+    qa(`select distinct to_char(day, 'YYYY-MM-DD') as day from lingora_xp_events where user_id = $1 order by 1 desc limit 400`),
+    q1(`select (select count(*) from direct_messages where from_user_id = $1 and created_at >= ${today})::int
+        + (select count(*) from group_messages where from_user_id = $1 and created_at >= ${today})::int
+        + (select count(*) from chat.messages where from_user_id = $1 and deleted_at is null and created_at >= ${today})::int as sent,
+        (select count(*) from direct_messages where to_user_id = $1 and read_at is null and deleted_at is null)::int as unread,
+        (select count(*) from ops.inbox where user_id = $1 and read_at is null)::int as notifications`),
+    q1(`select ${TRIO_DONE.wordle} as wordle, ${TRIO_DONE.lingora} as lingora, ${TRIO_DONE.banter} as banter`),
+    qa(`select to_char(day, 'YYYY-MM-DD') as day from ops.trio_claims where user_id = $1 order by day desc limit 400`),
+    q1(`select coins from users where id = $1`),
+    crewView(userId).catch(() => null),
+    seasonView(userId).catch(() => null),
+    appUrls(),
+  ]);
+  const day = utcDay();
+  const claimDays = claims.map((r: any) => r.day as string);
+  const claimed = claimDays.includes(day);
+  const streak = dayStreak(claimDays, day);
+  return {
+    day,
+    wordle: { rounds: w.rounds ?? 0, wins: w.wins ?? 0, dailyDone: !!d.finished, dailyWon: !!d.won, dailyStreak: dayStreak(dDays.map((r: any) => r.day), day) },
+    lingora: { xp: l.xp ?? 0, lessons: l.lessons ?? 0, reviews: l.reviews ?? 0, streak: dayStreak(lDays.map((r: any) => r.day), day) },
+    banter: { sent: b.sent ?? 0, unread: b.unread ?? 0, notifications: b.notifications ?? 0 },
+    trio: { wordle: !!done.wordle, lingora: !!done.lingora, banter: !!done.banter, claimed, coins: trioCoins(claimed ? streak : streak + 1), streak },
+    crew: crew ? { name: crew.name, emoji: crew.emoji, total: crew.total, war: crew.war ? { opponent: crew.war.opponent.name, mine: crew.war.mine, theirs: crew.war.theirs, endsAt: crew.war.endsAt } : null } : null,
+    season: season ? { name: season.name, tier: season.tier, xp: season.xp, tierXp: season.rules.tierXp, today: season.today, dayCap: season.rules.dayCap } : null,
+    coins: Number(me.coins ?? 0),
+    urls,
+  };
+}
+
+/** Claim today's trio (once a day, only with all three done). */
+export async function claimTrio(userId: string): Promise<{ coins: number; streak: number } | { error: string }> {
+  if (!query) return { error: "Not available right now." };
+  const days = (await query(`select to_char(day, 'YYYY-MM-DD') as day from ops.trio_claims where user_id = $1 order by day desc limit 400`, [userId]).catch(() => [])).map((r) => r.day as string);
+  const day = utcDay();
+  if (days.includes(day)) return { error: "Already claimed today." };
+  const streak = dayStreak(days, day) + 1, coins = trioCoins(streak);
+  const [r] = await query(
+    `with claimed as (
+       insert into ops.trio_claims (user_id, day, coins)
+       select $1, (now() at time zone 'UTC')::date, $2 where ${TRIO_DONE.wordle} and ${TRIO_DONE.lingora} and ${TRIO_DONE.banter}
+       on conflict do nothing returning 1
+     ), paid as (
+       update users set coins = coins + $2 where id = $1 and exists (select 1 from claimed) returning 1
+     )
+     select exists (select 1 from claimed) as ok`, [userId, coins]).catch((err) => { original.warn("[ops] Trio claim:", err?.message); return []; });
+  if (!r?.ok) return { error: "Do something in all three apps today first." };
+  return { coins, streak };
 }

@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { VoiceNotice } from '../components/VoiceNotice'
+import { TodayStrip } from '../components/TodayStrip'
 import { COURSES, isLessonUnlocked, isUnitComplete, nextLessonId, unitReviewId } from '../content'
 import { currentSectionIndex, isSectionComplete, levelLabel, sectionProgress, sections, type Section } from '../content/sections'
 import type { Course } from '../content/types'
@@ -14,7 +15,7 @@ const zigzag = (i: number) => ({ '--zz': ZIGZAG[i] }) as CSSProperties
 
 export function Home() {
   const navigate = useNavigate()
-  const { activeLang, progress, streak, xpByDay, dailyGoal, name } = useStore()
+  const { activeLang, progress, streak, xpByDay, dailyGoal, name, account } = useStore()
   const course = COURSES[activeLang]
   const prog = progress[activeLang]
   const due = dueCards(prog)
@@ -56,6 +57,7 @@ export function Home() {
       </section>
 
       <VoiceNotice course={course} />
+      {account && <TodayStrip app="lingora" navigate={navigate} lingoraDue={due.length} />}
 
       <div className="mode-grid home-extras">
         <Link to="/stories" className="mode-card" data-testid="home-stories">
