@@ -6,7 +6,8 @@ import { StudyPage, StudyRoomPage } from './screens/StudyPage'
 import { SeasonPage } from './screens/SeasonPage'
 import { AnnouncementBanner } from './components/AnnouncementBanner'
 import { Fragment, useEffect, type ReactNode } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import { CommandPalette } from './components/CommandPalette'
 import { Shell } from './components/Shell'
 import { ConversationPage } from './screens/ConversationPage'
 import { FriendChatPage, GroupChatPage, NewGroupPage } from './screens/FriendChatPage'
@@ -85,11 +86,19 @@ export function App() {
   )
 }
 
+/** Ctrl/⌘+K: jump anywhere in Lingora, Wordle Unlimited or Banter. */
+function PaletteHost() {
+  const navigate = useNavigate()
+  const account = useStore((s) => s.account)
+  return <CommandPalette app="lingora" navigate={navigate} signedIn={!!account} />
+}
+
 function MainApp() {
   return (
     <>
       <NotificationsWatcher />
       <Toaster />
+      <PaletteHost />
       <Routes>
         <Route path="/lesson/:lessonId" element={<Remount param="lessonId"><LessonPage /></Remount>} />
         <Route path="/reading/:readingId" element={<Remount param="readingId"><ReadingPage /></Remount>} />

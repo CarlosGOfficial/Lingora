@@ -3,6 +3,7 @@ import { useWallet } from '../shop/useWallet'
 import { useFriendAlerts } from '../social/useFriends'
 import { ThemeMenu } from '../theme/ThemeMenu'
 import { HubBell } from './HubBell'
+import { openPalette } from './CommandPalette'
 import { APP_NAME } from '../config'
 import { COURSES, LANG_CODES } from '../content'
 import { dueCards, liveStreak, todayXp, useStore } from '../store/useStore'
@@ -81,6 +82,7 @@ export function Shell() {
             <Link to="/shop" className="topstat coin-stat" title="Coins — open the shop">
               <Icon name="coin" size={18} /> <span key={coins} className="bump">{coins.toLocaleString()}</span>
             </Link>
+            <button className="icon-btn" onClick={openPalette} aria-label="Search and jump" title="Search and jump (Ctrl+K)" data-testid="palette-button"><Icon name="search" size={20} /></button>
             <HubBell />
             <ThemeMenu />
           </div>
