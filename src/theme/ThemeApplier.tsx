@@ -1,6 +1,4 @@
-import { useEffect } from 'react'
-import { themeReveal } from '../lib/themeReveal'
-let painted: string | null = null
+import { useLayoutEffect } from 'react'
 import { SHOP_ITEM_BY_ID } from '../shop/catalog'
 import { ownedItems } from '../shop/wallet'
 import { useStore } from '../store/useStore'
@@ -20,8 +18,8 @@ export function ThemeApplier() {
   const choice = useStore((s) => s.appearance.theme)
   const active = useActiveTheme()
 
-  useEffect(() => {
-    const paint = () => {
+  // Painted during the commit (a layout effect), so a theme change shows in the same frame.
+  useLayoutEffect(() => {
     const root = document.documentElement
     for (const name of THEME_VAR_NAMES) root.style.removeProperty(name)
     if (active) {
@@ -34,11 +32,6 @@ export function ThemeApplier() {
     }
     const meta = document.querySelector('meta[name="theme-color"]')
     meta?.setAttribute('content', getComputedStyle(root).getPropertyValue('--surface').trim() || '#5b5bd6')
-    }
-    // Picking another theme reveals it in a circle; tuning a custom theme's colours doesn't.
-    if (painted !== null && painted !== choice) themeReveal(paint)
-    else paint()
-    painted = choice
   }, [choice, active])
 
   return null

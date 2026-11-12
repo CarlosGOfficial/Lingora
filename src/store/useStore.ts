@@ -11,6 +11,11 @@ import { emptyOutbox, type Account, type Outbox } from '../sync/types'
 import { DEFAULT_CUSTOM_THEME, type CustomTheme, type ThemeChoice } from '../theme/themes'
 import { bump, emptyStreak, reconcile, type Streak } from './streak'
 import { setExtraItems } from '../content'
+import { flushSync } from 'react-dom'
+import { themeReveal } from '../lib/themeReveal'
+
+/** A theme change: snapshot the old look, then render the new one in one go (lib/themeReveal). */
+const switchTheme = (apply: () => void) => themeReveal(() => flushSync(apply))
 import { itemsOfDecks, type MyDeck } from '../social/decks'
 
 export interface CardRecord extends SrsCard {
@@ -285,19 +290,22 @@ export const useStore = create<State>()(
           if (!item || item.category !== slot || !ownedItems(s.shop).has(itemId)) return
         }
         const appearance = { ...s.appearance, equipped: { ...s.appearance.equipped, [slot]: itemId } }
-        if (slot === 'theme') appearance.theme = (itemId as ThemeChoice | null) ?? 'system'
-        set({ appearance })
+        if (slot === 'theme' && appearance.theme !== ((itemId as ThemeChoice | null) ?? 'system')) {
+          appearance.theme = (itemId as ThemeChoice | null) ?? 'system'
+          switchTheme(() => set({ appearance }))
+        } else set({ appearance })
       },
 
       setTheme(choice) {
         const s = get()
         const isItem = choice.startsWith('th_')
         if (isItem && !ownedItems(s.shop).has(choice)) return
-        set({ appearance: { ...s.appearance, theme: choice, equipped: { ...s.appearance.equipped, theme: isItem ? choice : null } } })
+        if (choice === s.appearance.theme) return
+        switchTheme(() => set({ appearance: { ...s.appearance, theme: choice, equipped: { ...s.appearance.equipped, theme: isItem ? choice : null } } }))
       },
 
       setCustomTheme(theme) {
-        set({ appearance: { ...get().appearance, custom: theme, theme: 'custom', equipped: { ...get().appearance.equipped, theme: null } } })
+        switchTheme(() => set({ appearance: { ...get().appearance, custom: theme, theme: 'custom', equipped: { ...get().appearance.equipped, theme: null } } }))
       },
     }),
     {
