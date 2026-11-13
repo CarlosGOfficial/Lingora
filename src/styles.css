@@ -1105,6 +1105,8 @@ input[type='range'] { accent-color: var(--accent); }
 
 .node.checkpoint { border-radius: 24px; }
 .node.checkpoint.current { background-image: linear-gradient(145deg, rgb(255 255 255 / 25%), transparent 60%), var(--accent-gradient); }
+.node.podcast { border-radius: 50% 50% 46% 46%; }
+.node.podcast.current { background-image: linear-gradient(145deg, rgb(255 255 255 / 25%), transparent 60%), linear-gradient(135deg, #f97316, #db2777); }
 
 @media (prefers-reduced-motion: reduce) {
   .listening-dots i, .speak-units span, .cloze-blank.filled, .live-transcript, .speak-result { animation: none; }

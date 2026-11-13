@@ -10,6 +10,7 @@ import { buildDict, segment, type Dict, type LookupLang } from '../lib/lookup'
 import { ttsSupported } from '../lib/speech'
 import { PODCAST_XP, courseEpisode, finishedUnits, type Episode, type EpisodeLine } from '../podcast/episode'
 import { doneEpisodes, markDone, saveEpisodes, savedEpisode, savedEpisodes } from '../podcast/store'
+import { premadeEpisodes } from '../podcast/premade'
 import { useStore } from '../store/useStore'
 import { api } from '../sync/api'
 
@@ -26,7 +27,12 @@ function useEpisodes() {
   const course = COURSES[activeLang]
   const units = finishedUnits(course, completed)
   const last = units[units.length - 1]
-  const courseEps = useMemo(() => units.slice().reverse().map((u) => courseEpisode(course, u)).filter((e): e is Episode => !!e), [course, units.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Premade episodes for the units you've finished (newest first), then each unit's own sentences.
+  const courseEps = useMemo(() => {
+    const done = new Set(units.map((u) => u.id))
+    const pre = premadeEpisodes(course.lang).filter((e) => done.has(e.unitId)).reverse()
+    return [...pre, ...units.slice().reverse().map((u) => courseEpisode(course, u)).filter((e): e is Episode => !!e)]
+  }, [course, units.length]) // eslint-disable-line react-hooks/exhaustive-deps
   const [server, setServer] = useState<Episode[]>(() => savedEpisodes().filter((e) => e.lang === activeLang))
   const [canMake, setCanMake] = useState(false)
   useEffect(() => {
@@ -231,6 +237,10 @@ export function PodcastPlayer() {
   const streakBefore = useStore((s) => s.streak.current)
   const course = COURSES[activeLang]
   const episode = useMemo(() => {
+    if (id.startsWith('pre-')) {
+      const ep = premadeEpisodes(course.lang).find((e) => e.id === id)
+      return ep && finishedUnits(course, completed).some((u) => u.id === ep.unitId) ? ep : null
+    }
     if (id.startsWith('course-')) {
       const unit = finishedUnits(course, completed).find((u) => `course-${u.id}` === id)
       return unit ? courseEpisode(course, unit) : null

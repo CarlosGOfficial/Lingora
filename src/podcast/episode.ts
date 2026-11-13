@@ -51,7 +51,18 @@ export const knownItems = (units: Unit[]): Item[] => units.flatMap((u) => u.less
 const GLUE: Record<LangCode, string[]> = {
   zh: [],
   ja: [],
-  pt: ['a', 'o', 'as', 'os', 'um', 'uma', 'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas', 'e', 'que', 'com', 'para', 'por', 'se', 'eu', 'voce', 'ele', 'ela', 'nao', 'sim', 'mas', 'muito', 'esta', 'e'],
+  pt: [
+    // articles, prepositions and their contractions
+    'a', 'o', 'as', 'os', 'um', 'uma', 'uns', 'umas', 'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas', 'num', 'numa', 'ao', 'aos', 'com', 'para', 'por', 'pra', 'sem', 'ate',
+    // pronouns and possessives
+    'eu', 'voce', 'voces', 'ele', 'ela', 'eles', 'elas', 'nos', 'me', 'te', 'lhe', 'meu', 'minha', 'seu', 'sua', 'nosso', 'nossa', 'este', 'esta', 'esse', 'essa', 'isso', 'isto', 'aquele', 'aquela', 'tudo', 'todo', 'toda',
+    // glue words
+    'e', 'ou', 'que', 'se', 'nao', 'sim', 'mas', 'muito', 'mais', 'menos', 'bem', 'tao', 'ja', 'so', 'boa', 'bons', 'sobre',
+    // the commonest forms of ser, estar, ter, ir
+    'sou', 'e', 'somos', 'sao', 'estou', 'esta', 'estamos', 'estao', 'tem', 'temos', 'tenho', 'vai', 'vamos', 'vao', 'vou', 'foi',
+    // numbers
+    'onze', 'doze', 'vinte', 'trinta', 'cem', 'mil',
+  ],
 }
 
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -61,15 +72,30 @@ const WORD = /[A-Za-zÀ-ÖØ-öø-ÿ]+/g
 /**
  * What's "known": for Chinese and Japanese, every character in the items you've met (so a
  * known character in a new combination counts, as it does for readers); for Portuguese,
- * every word in them plus the basic glue words.
+ * every word in them plus the basic glue words. (Japanese also counts the kana of readings.)
  */
 export function knownSet(lang: LangCode, items: Item[]): Set<string> {
   const out = new Set<string>(GLUE[lang])
   for (const i of items) {
     if (lang === 'pt') for (const w of i.target.match(WORD) ?? []) out.add(fold(w))
-    else for (const c of i.target.match(CJK) ?? []) out.add(c)
+    else {
+      for (const c of i.target.match(CJK) ?? []) out.add(c)
+      // Japanese: the kana of a word's reading are known too (私 is taught with わたし).
+      if (lang === 'ja') for (const c of (i.reading ?? '').match(CJK) ?? []) out.add(c)
+    }
   }
   return out
+}
+
+/** Portuguese: a known word, or its plural / feminine / plural feminine form (irmãos, nova, velhas). */
+function ptKnown(w: string, known: Set<string>): boolean {
+  if (known.has(w)) return true
+  const stems = [w.replace(/s$/, ''), w.replace(/es$/, ''), w.replace(/aes$/, 'ao'), w.replace(/oes$/, 'ao'), w.replace(/is$/, 'l')]
+  for (const st of stems) {
+    if (known.has(st)) return true
+    if (st.endsWith('a') && known.has(st.slice(0, -1) + 'o')) return true
+  }
+  return false
 }
 
 /** The share of known units (characters / words) in some lines, and the unknown ones. */
@@ -80,7 +106,7 @@ export function knownRatio(lang: LangCode, lines: { target: string }[], known: S
     const units = lang === 'pt' ? (l.target.match(WORD) ?? []).map(fold) : l.target.match(CJK) ?? []
     for (const u of units) {
       total++
-      if (!known.has(u)) unknown.set(u, (unknown.get(u) ?? 0) + 1)
+      if (!(lang === 'pt' ? ptKnown(u, known) : known.has(u))) unknown.set(u, (unknown.get(u) ?? 0) + 1)
     }
   }
   const missed = Array.from(unknown.values()).reduce((a, b) => a + b, 0)

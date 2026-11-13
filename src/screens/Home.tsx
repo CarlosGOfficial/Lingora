@@ -8,6 +8,8 @@ import { currentSectionIndex, isSectionComplete, levelLabel, sectionProgress, se
 import type { Course } from '../content/types'
 import { dayKey, formatRelative } from '../lib/date'
 import { dueCards, liveStreak, todayXp, useStore } from '../store/useStore'
+import { premadeEpisodes } from '../podcast/premade'
+import { doneEpisodes } from '../podcast/store'
 
 const ZIGZAG = [0, 46, 70, 46, 0, -46, -70, -46]
 /** The path's sideways swing; CSS scales it down on narrow screens (--zz-scale). */
@@ -23,6 +25,9 @@ export function Home() {
   const xp = todayXp(xpByDay)
   const goalPct = Math.min(1, xp / dailyGoal)
   const next = nextLessonId(course, prog.completedLessons)
+  // Premade podcasts sit after the unit they're written for.
+  const podcastAfter = new Map(premadeEpisodes(activeLang).map((e) => [e.unitId, e]))
+  const heardPodcasts = doneEpisodes()
   const s = liveStreak(streak)
   // One section on screen at a time: yours by default, or one picked from the Sections page.
   const [params, setParams] = useSearchParams()
@@ -199,6 +204,27 @@ export function Home() {
                   </div>
                 </div>
               )}
+              {podcastAfter.get(unit.id) && (() => {
+                const ep = podcastAfter.get(unit.id)!
+                const heard = heardPodcasts.includes(ep.id)
+                return (
+                  <div className="path-step" style={zigzag((unit.lessons.length + (unit.reading ? 2 : 1)) % ZIGZAG.length)}>
+                    <button
+                      className={`node podcast ${heard ? 'done' : unitDone ? 'current' : 'locked'}`}
+                      disabled={!unitDone}
+                      onClick={() => navigate(`/podcasts/${ep.id}`)}
+                      aria-label={`Podcast: ${ep.title}`}
+                      data-testid="path-podcast"
+                    >
+                      <Icon name={heard ? 'check' : unitDone ? 'headphones' : 'lock'} size={28} />
+                    </button>
+                    <div className="node-label">
+                      <strong>Podcast</strong>
+                      <span className="muted small">{ep.title}</span>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           </section>
         )
