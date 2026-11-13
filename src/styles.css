@@ -1581,6 +1581,7 @@ input[type='range'] { accent-color: var(--accent); }
 .bubble .spoiler:not(.shown) { color: transparent; background: color-mix(in srgb, var(--text) 55%, var(--surface)); }
 .bubble .spoiler:not(.shown) * { color: transparent; background: transparent; }
 .bubble .spoiler.shown { background: color-mix(in srgb, currentColor 14%, transparent); }
+.custom-emoji { display: inline-block; height: 1.375em; width: auto; max-width: 3em; object-fit: contain; vertical-align: -0.3em; }
 .bubble .mention { font-weight: 700; padding: 0 3px; border-radius: 5px; cursor: pointer; background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .bubble.me .mention { background: rgb(255 255 255 / 22%); }
 .bubble .mention.me { background: color-mix(in srgb, #f59e0b 30%, transparent); }

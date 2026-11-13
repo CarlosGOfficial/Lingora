@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom'
 
 const URL_RE = /https?:\/\/[^\s<>()]+[^\s<>().,!?;:'"]/
 
-type Ctx = { me: string | null; go: (path: string) => void }
+type Ctx = { me: string | null; go: (path: string) => void; banter?: string }
 type Rule = { re: RegExp; render: (m: RegExpExecArray, key: number, ctx: Ctx) => ReactNode }
 
 /** A link to Lingora itself: its path, so it opens here instead of in a new tab. */
@@ -31,7 +31,15 @@ function Spoiler({ children }: { children: ReactNode }) {
   )
 }
 
+/** A Banter custom emoji (<:name:id>), its picture from Banter; just :name: if it can't load. */
+function CustomEmoji({ name, image, banter }: { name: string; image: string; banter?: string }) {
+  const [broken, setBroken] = useState(false)
+  if (!banter || broken) return <span title={`:${name}:`}>:{name}:</span>
+  return <img className="custom-emoji" src={`${banter}/api/emoji-images/${image}`} alt={`:${name}:`} title={`:${name}:`} draggable={false} onError={() => setBroken(true)} />
+}
+
 const RULES: Rule[] = [
+  { re: /<:([a-z0-9_]{2,32}):([0-9a-f-]{36})>/, render: (m, k, c) => <CustomEmoji key={k} name={m[1]} image={m[2]} banter={c.banter} /> },
   { re: /`([^`\n]+)`/, render: (m, k) => <code key={k} className="inline-code">{m[1]}</code> },
   { re: /\|\|(.+?)\|\|/, render: (m, k, c) => <Spoiler key={k}>{inline(m[1], c)}</Spoiler> },
   { re: /\*\*(.+?)\*\*/, render: (m, k, c) => <strong key={k}>{inline(m[1], c)}</strong> },
@@ -83,9 +91,9 @@ function inline(text: string, ctx: Ctx): ReactNode[] {
   return out
 }
 
-export function Formatted({ text, me }: { text: string; me: string | null }) {
+export function Formatted({ text, me, banter }: { text: string; me: string | null; banter?: string }) {
   const go = useNavigate()
-  const ctx: Ctx = { me, go: (p) => go(p) }
+  const ctx: Ctx = { me, go: (p) => go(p), banter: banter?.replace(/\/+$/, '') }
   const blocks: ReactNode[] = []
   // Code blocks first; everything else line by line (so quotes work).
   const parts = text.split(/```(?:[a-z0-9]*\n)?([\s\S]*?)```/)

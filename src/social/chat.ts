@@ -98,7 +98,7 @@ export function messagePreview(content: string): string {
   if (st) return `🖼️ ${st.name}`
   const clip = sharedClip(content)
   if (clip) return `🎬 Shared a clip: ${clip.title}`
-  const text = content.trimStart()
+  const text = content.trimStart().replace(/<:([a-z0-9_]{2,32}):[0-9a-f-]{36}>/g, ':$1:')
   return text.length > 120 ? text.slice(0, 120) + '…' : text
 }
 

@@ -214,7 +214,7 @@ export function MessageBody({ content, mine, sender, me, onMediaLoad }: { conten
   return (
     <>
       <div className={`bubble ${mine ? 'me' : 'them'} ${jumbo ? 'jumbo' : ''} ${!mine && mentions(text, me ?? null) ? 'mentioned' : ''}`}>
-        <Formatted text={text} me={me ?? null} />
+        <Formatted text={text} me={me ?? null} banter={links?.banterUrl} />
       </div>
       {invites.slice(0, 2).map((c) => <BanterInviteCard key={c} code={c} mine={mine} sender={sender} />)}
     </>
