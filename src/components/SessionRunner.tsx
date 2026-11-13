@@ -35,6 +35,8 @@ interface Props {
   course: Course
   onFinish(summary: SessionSummary): void
   onExit(): void
+  /** Tests (placement): a wrong answer isn't asked again at the end. */
+  noRetry?: boolean
 }
 
 const PRAISE = ['Nice!', 'Great job!', 'Correct!', 'Excellent!', 'You got it!']
@@ -70,7 +72,7 @@ function ExerciseView(props: { ex: Exercise; course: Course; locked: boolean; on
  * Plays a queue of exercises. Wrong answers are re-queued once at the end
  * (error-driven practice); first-attempt results feed the SRS ratings.
  */
-export function SessionRunner({ exercises, course, onFinish, onExit }: Props) {
+export function SessionRunner({ exercises, course, onFinish, onExit, noRetry = false }: Props) {
   const [queue, setQueue] = useState(exercises)
   const [idx, setIdx] = useState(0)
   const [feedback, setFeedback] = useState<ExerciseResult | null>(null)
@@ -114,7 +116,7 @@ export function SessionRunner({ exercises, course, onFinish, onExit }: Props) {
         setComboPaid(bonus > 0)
       }
     }
-    if (r.quality === 'wrong' && firstAttempt) {
+    if (r.quality === 'wrong' && firstAttempt && !noRetry) {
       requeued.current.add(ex)
       setQueue((q) => [...q, ex])
     }

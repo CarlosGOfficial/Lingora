@@ -4,6 +4,7 @@ import { CharacterPage, CharactersPage } from './screens/CharactersPage'
 import { DuelPage, DuelsPage } from './screens/DuelsPage'
 import { StudyPage, StudyRoomPage } from './screens/StudyPage'
 import { SeasonPage } from './screens/SeasonPage'
+import { PlacementPage } from './screens/PlacementPage'
 import { AnnouncementBanner } from './components/AnnouncementBanner'
 import { Fragment, useEffect, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
@@ -105,6 +106,7 @@ function MainApp() {
         <Route path="/story/:storyId" element={<Remount param="storyId"><StoryPage /></Remount>} />
         <Route path="/unit-review/:unitId" element={<Remount param="unitId"><UnitReviewPage /></Remount>} />
         <Route path="/conversation" element={<ConversationPage />} />
+        <Route path="/placement" element={<PlacementPage />} />
         <Route path="/section-test/:index" element={<Remount param="index"><SectionTestPage /></Remount>} />
         <Route path="/practice/:mode" element={<Remount param="mode"><PracticeSession /></Remount>} />
         <Route path="/decks/:id/learn" element={<Remount param="id"><DeckLearn /></Remount>} />

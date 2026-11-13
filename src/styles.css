@@ -1539,6 +1539,9 @@ input[type='range'] { accent-color: var(--accent); }
 .chip-unit { padding: 4px 10px; border-radius: 999px; font-size: .78rem; font-weight: 700; background: var(--surface-2); color: var(--muted); }
 .jump-result { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; padding-top: 80px; }
 .jump-result p { max-width: 420px; }
+.placement-spot { display: flex; flex-direction: column; gap: 2px; padding: 12px 22px; border-radius: 18px; background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.placement-spot strong { font-size: 1.25rem; }
+.onboard-choice { display: grid; gap: 10px; margin: 6px 0 4px; }
 @media (max-width: 520px) {
   .section-banner { padding: 18px; border-radius: 20px; }
   .section-banner h2 { font-size: 1.45rem; }

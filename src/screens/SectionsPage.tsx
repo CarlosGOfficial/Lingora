@@ -16,6 +16,17 @@ export function SectionsPage() {
   return (
     <div className="stack">
       <PageHeader icon="layers" title={`${course.name} sections`} subtitle={`${course.standardFull}. Each section matches one level.`} />
+      {/* Not at the start of the course? Find your level instead of jumping section by section. */}
+      <article className="jump-card placement-card" data-testid="placement-card">
+        <Icon name="target" size={28} className="c-accent" />
+        <div className="grow">
+          <strong>Already know some {course.name}?</strong>
+          <p className="small muted">Take a 25-question placement test and skip what you know. Earlier words join your reviews.</p>
+        </div>
+        <Link to="/placement" className="btn">
+          Find my level
+        </Link>
+      </article>
       <div className="section-list stagger">
         {all.map((s) => {
           const { done, total } = sectionProgress(s, completed)

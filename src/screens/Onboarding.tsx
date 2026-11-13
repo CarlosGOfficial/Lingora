@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { APP_NAME, DAILY_GOALS } from '../config'
 import { COURSES, LANG_CODES } from '../content'
 import type { LangCode } from '../content/types'
@@ -12,6 +13,7 @@ export function Onboarding() {
   const [step, setStep] = useState(0)
   const [lang, setLang] = useState<LangCode | null>(null)
   const [goal, setGoal] = useState(20)
+  const navigate = useNavigate()
   const name = account?.username ?? ''
 
   return (
@@ -76,8 +78,23 @@ export function Onboarding() {
               <button className="btn btn-ghost" onClick={() => setStep(0)}>
                 Back
               </button>
-              <button className="btn btn-primary btn-lg grow" onClick={() => lang && onboard(name, lang, goal)}>
-                Start my first lesson
+              <span className="grow" />
+            </div>
+            {/* New to it, or already know some (the placement test)? */}
+            <div className="onboard-choice">
+              <button className="btn btn-primary btn-lg block" data-testid="onboard-start" onClick={() => lang && onboard(name, lang, goal)}>
+                I'm new: start my first lesson
+              </button>
+              <button
+                className="btn btn-lg block"
+                data-testid="onboard-placement"
+                onClick={() => {
+                  if (!lang) return
+                  navigate('/placement')
+                  onboard(name, lang, goal)
+                }}
+              >
+                I already know some: find my level
               </button>
             </div>
           </>
