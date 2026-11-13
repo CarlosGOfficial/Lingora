@@ -20,6 +20,7 @@ export type Today = {
   trio: { wordle: boolean; lingora: boolean; banter: boolean; claimed: boolean; coins: number; streak: number };
   crew: { name: string; emoji: string; total: number; war: { opponent: string; mine: number; theirs: number; endsAt: string } | null } | null;
   season: { name: string; tier: number; xp: number; tierXp: number; today: number; dayCap: number } | null;
+  streaks?: { count: number; best: { id: string; name: string; days: number } | null; atRisk: { id: string; name: string; days: number }[] };
   coins: number;
   urls: Record<TodayApp, string | null>;
 };
@@ -147,6 +148,8 @@ export function TodayStrip({ app, navigate, text, lingoraDue, onClaimed, style }
   const seasonTo = app === "banter" && today.urls.wordle ? { href: today.urls.wordle.replace(/\/$/, "") + "/season" } : "/season";
   const seasonPct = today.season ? Math.min(100, Math.round(((today.season.xp % today.season.tierXp) / today.season.tierXp) * 100)) : 0;
   const crewPath = app === "wordle" ? "/clans" : app === "banter" ? "/games/crew" : "/crew";
+  // Wordle's friends list is a panel, not a page: it opens on "#friends".
+  const friendsPath = app === "banter" ? "/chats/friends" : app === "lingora" ? "/friends" : "#friends";
 
   return (
     <section data-testid="today-strip" aria-label={T("today.title", "Today")}
@@ -181,8 +184,12 @@ export function TodayStrip({ app, navigate, text, lingoraDue, onClaimed, style }
       </div>
       {error && <span role="alert" style={{ fontSize: 12.5, color: "#dc2626" }}>{error}</span>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 10 }}>{ORDER.map(tile)}</div>
-      {(today.crew || today.season) && (
+      {(today.crew || today.season || today.streaks?.count) && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {!!today.streaks?.count && chip("streaks", today.streaks.atRisk.length
+            ? <><span>🔥</span><strong style={{ color: "#ea580c" }}>{T("today.streaksRisk", "{n} friend streaks end tonight", { n: today.streaks.atRisk.length })}</strong><span style={{ opacity: 0.7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{today.streaks.atRisk.map((s) => `${s.name} ${s.days}`).join(" · ")}</span></>
+            : <><span>🔥</span><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{T("today.streakBest", "{days} days with {name}", { days: today.streaks.best!.days, name: today.streaks.best!.name })}</span>{today.streaks.count > 1 && <span style={{ opacity: 0.7 }}>{T("today.streakMore", "+{n} more", { n: today.streaks.count - 1 })}</span>}</>,
+            friendsPath)}
           {today.crew && chip("crew", today.crew.war
             ? <><span>{today.crew.emoji}</span><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{T("today.war", "Crew war vs {name}", { name: today.crew.war.opponent })}</span><strong style={{ color: today.crew.war.mine >= today.crew.war.theirs ? "#16a34a" : "#dc2626" }}>{today.crew.war.mine}–{today.crew.war.theirs}</strong></>
             : <><span>{today.crew.emoji}</span><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{today.crew.name}</span><strong>{T("today.crewPoints", "{n} pts this week", { n: today.crew.total })}</strong></>,

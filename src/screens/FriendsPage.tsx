@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { StreakBadge } from '../components/StreakBadge'
 import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { NameTag } from '../components/NameTag'
@@ -203,6 +204,7 @@ function FriendRow({ friend: f, onRemove }: { friend: Friend; onRemove: () => vo
         <ProfileLink id={f.id}>
           <NameTag name={f.username} nameColor={f.nameColor} title={f.title} />
         </ProfileLink>
+        <StreakBadge friendId={f.id} />
         {f.onBanter && <span className="banter-pill" title="Uses Banter, the chat app for your Wordle and Lingora friends">On Banter</span>}
         <span className={`small ${f.online ? 'c-success' : 'muted'}`}>
           {status}

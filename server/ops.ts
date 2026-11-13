@@ -206,6 +206,13 @@ export const OPS_SCHEMA = [
     created_at timestamptz not null default now(),
     primary key (user_id, day)
   )`,
+  `create table if not exists ops.friend_streak_marks (
+    user_a text not null,
+    user_b text not null,
+    mark text not null,
+    created_at timestamptz not null default now(),
+    primary key (user_a, user_b, mark)
+  )`,
   `create table if not exists ops.recap_runs (
     period text primary key,
     sent_at timestamptz not null default now()
@@ -328,6 +335,8 @@ export async function startOps(app: OpsApp, run: OpsQuery) {
   setInterval(() => void crewTick(), 5 * 60_000).unref();
   setTimeout(() => void crewTick(), 20_000).unref();
   setInterval(() => void recapTick(), 30 * 60_000).unref();
+  setInterval(() => void friendStreakTick(), 30 * 60_000).unref();
+  setTimeout(() => void friendStreakTick(), 50_000).unref();
   setTimeout(() => void recapTick(), 40_000).unref();
   setInterval(() => void flushErrors(), 10_000).unref();
 }
@@ -1325,6 +1334,8 @@ export type Today = {
   trio: { wordle: boolean; lingora: boolean; banter: boolean; claimed: boolean; coins: number; streak: number };
   crew: { name: string; emoji: string; total: number; war: { opponent: string; mine: number; theirs: number; endsAt: string } | null } | null;
   season: { name: string; tier: number; xp: number; tierXp: number; today: number; dayCap: number } | null;
+  /** Streaks with friends: the longest, and the ones that end tonight unless you both do something. */
+  streaks: { count: number; best: { id: string; name: string; days: number } | null; atRisk: { id: string; name: string; days: number }[] };
   coins: number;
   urls: Record<OpsApp, string | null>;
 };
@@ -1355,7 +1366,7 @@ export async function todayFor(userId: string): Promise<Today | null> {
   const q1 = async (sql: string, params: unknown[] = [userId]) => (await query!(sql, params).catch((err) => { original.warn("[ops] Today:", err?.message); return []; }))[0] ?? {};
   const qa = async (sql: string, params: unknown[] = [userId]) => query!(sql, params).catch((err) => { original.warn("[ops] Today:", err?.message); return []; });
   const today = `(now() at time zone 'UTC')::date`;
-  const [w, d, dDays, l, lDays, b, done, claims, me, crew, season, urls] = await Promise.all([
+  const [w, d, dDays, l, lDays, b, done, claims, me, crew, season, urls, streaks] = await Promise.all([
     q1(`select count(*)::int as rounds, count(*) filter (where won)::int as wins from round_stats where user_id = $1 and created_at >= ${today}`),
     q1(`select finished, won from daily_results where user_id = $1 and day = to_char(${today}, 'YYYY-MM-DD')`),
     qa(`select day from daily_results where user_id = $1 and finished order by day desc limit 400`),
@@ -1375,6 +1386,7 @@ export async function todayFor(userId: string): Promise<Today | null> {
     crewView(userId).catch(() => null),
     seasonView(userId).catch(() => null),
     appUrls(),
+    friendStreaks(userId).catch(() => [] as FriendStreak[]),
   ]);
   const day = utcDay();
   const claimDays = claims.map((r: any) => r.day as string);
@@ -1388,6 +1400,11 @@ export async function todayFor(userId: string): Promise<Today | null> {
     trio: { wordle: !!done.wordle, lingora: !!done.lingora, banter: !!done.banter, claimed, coins: trioCoins(claimed ? streak : streak + 1), streak },
     crew: crew ? { name: crew.name, emoji: crew.emoji, total: crew.total, war: crew.war ? { opponent: crew.war.opponent.name, mine: crew.war.mine, theirs: crew.war.theirs, endsAt: crew.war.endsAt } : null } : null,
     season: season ? { name: season.name, tier: season.tier, xp: season.xp, tierXp: season.rules.tierXp, today: season.today, dayCap: season.rules.dayCap } : null,
+    streaks: {
+      count: streaks.length,
+      best: streaks[0] ? { id: streaks[0].friendId, name: streaks[0].name, days: streaks[0].days } : null,
+      atRisk: streaks.filter((x) => x.atRisk).slice(0, 5).map((x) => ({ id: x.friendId, name: x.name, days: x.days })),
+    },
     coins: Number(me.coins ?? 0),
     urls,
   };
@@ -1411,4 +1428,107 @@ export async function claimTrio(userId: string): Promise<{ coins: number; streak
      select exists (select 1 from claimed) as ok`, [userId, coins]).catch((err) => { original.warn("[ops] Trio claim:", err?.message); return []; });
   if (!r?.ok) return { error: "Do something in all three apps today first." };
   return { coins, streak };
+}
+
+/* ---------- Friend streaks ---------- */
+
+/*
+ * A streak with each friend: the days in a row (UTC) when you both did something in any
+ * of the three apps (a Wordle round or Daily, Lingora XP, or a message anywhere). It
+ * counts through yesterday until you've both been active today, so it's "at risk" until
+ * then. Milestones (7, 30, 100 days) give both people a trophy and a note; an evening
+ * nudge goes to whoever hasn't played yet when the other has.
+ */
+export const FRIEND_STREAK_MARKS = [7, 30, 100, 365];
+export type FriendStreak = { friendId: string; name: string; days: number; meToday: boolean; themToday: boolean; atRisk: boolean };
+
+/** Active days (YYYY-MM-DD) for some people over the last `back` days. */
+async function activeDays(ids: string[], back = 400): Promise<Map<string, Set<string>>> {
+  const out = new Map<string, Set<string>>(ids.map((id) => [id, new Set()]));
+  if (!query || !ids.length) return out;
+  const since = `now() - interval '${back} days'`;
+  const rows = await query(
+    `select user_id, to_char(d, 'YYYY-MM-DD') as day from (
+       select user_id, (created_at)::date as d from round_stats where user_id = any($1::text[]) and created_at > ${since}
+       union select user_id, (finished_at)::date from daily_results where user_id = any($1::text[]) and finished and finished_at > ${since}
+       union select user_id, day from lingora_xp_events where user_id = any($1::text[]) and day > (${since})::date
+       union select from_user_id, (created_at)::date from direct_messages where from_user_id = any($1::text[]) and created_at > ${since}
+       union select from_user_id, (created_at)::date from group_messages where from_user_id = any($1::text[]) and created_at > ${since}
+       union select from_user_id, (created_at)::date from chat.messages where from_user_id = any($1::text[]) and created_at > ${since}
+     ) x`, [ids]).catch((err) => { original.warn("[ops] Active days:", err?.message); return []; });
+  for (const r of rows) out.get(r.user_id)?.add(r.day);
+  return out;
+}
+
+/** The streak two people share, from their active days. */
+export function sharedStreak(a: Set<string>, b: Set<string>, today = utcDay()): { days: number; aToday: boolean; bToday: boolean } {
+  const both = Array.from(a).filter((d) => b.has(d));
+  return { days: dayStreak(both, today), aToday: a.has(today), bToday: b.has(today) };
+}
+
+const streakCache = new Map<string, { at: number; list: FriendStreak[] }>();
+/** Your streak with every friend (longest first; only those above zero). */
+export async function friendStreaks(userId: string, fresh = false): Promise<FriendStreak[]> {
+  if (!query) return [];
+  const hit = streakCache.get(userId);
+  if (hit && !fresh && Date.now() - hit.at < 60_000) return hit.list;
+  const friends = await query(
+    `select case when f.requester_id = $1 then f.addressee_id else f.requester_id end as id, coalesce(u.username, u.first_name, 'Friend') as name
+     from friendships f join users u on u.id = case when f.requester_id = $1 then f.addressee_id else f.requester_id end
+     where f.status = 'accepted' and (f.requester_id = $1 or f.addressee_id = $1)`, [userId]).catch(() => []);
+  const days = await activeDays([userId, ...friends.map((f) => f.id)]);
+  const today = utcDay();
+  const mine = days.get(userId) ?? new Set<string>();
+  const list = friends
+    .map((f): FriendStreak => {
+      const s = sharedStreak(mine, days.get(f.id) ?? new Set(), today);
+      return { friendId: f.id, name: f.name, days: s.days, meToday: s.aToday, themToday: s.bToday, atRisk: s.days > 0 && !(s.aToday && s.bToday) };
+    })
+    .filter((s) => s.days > 0)
+    .sort((a, b) => b.days - a.days);
+  streakCache.set(userId, { at: Date.now(), list });
+  return list;
+}
+
+/** Milestones and evening nudges, for everyone active in the last two days. Each one once. */
+export async function friendStreakTick(now = new Date()) {
+  if (!query) return;
+  try {
+    const pairs = await query(
+      `select requester_id as a, addressee_id as b from friendships where status = 'accepted'
+         and requester_id in (select id from users where last_seen_at > now() - interval '2 days')
+         and addressee_id in (select id from users where last_seen_at > now() - interval '2 days')`).catch(() => []);
+    if (!pairs.length) return;
+    const ids = Array.from(new Set<string>(pairs.flatMap((p) => [p.a, p.b])));
+    const [days, names] = await Promise.all([
+      activeDays(ids),
+      query(`select id, coalesce(username, first_name, 'Friend') as name from users where id = any($1::text[])`, [ids]).then((r) => new Map(r.map((x) => [x.id, x.name]))),
+    ]);
+    const today = utcDay(now);
+    const evening = now.getUTCHours() >= 18;
+    for (const { a, b } of pairs) {
+      const s = sharedStreak(days.get(a) ?? new Set(), days.get(b) ?? new Set(), today);
+      const [x, y] = a < b ? [a, b] : [b, a];
+      // A milestone reached today (both active today, so the streak is final for the day).
+      if (s.aToday && s.bToday && FRIEND_STREAK_MARKS.includes(s.days)) {
+        const [won] = await query(`insert into ops.friend_streak_marks (user_a, user_b, mark) values ($1, $2, $3) on conflict do nothing returning 1`, [x, y, `days:${s.days}`]);
+        if (won) {
+          const tier = s.days >= 100 ? "gold" : s.days >= 30 ? "silver" : "bronze";
+          for (const [me, other] of [[a, b], [b, a]]) {
+            await query(`insert into ops.trophies (user_id, app, key, name, icon, tier, detail) values ($1, 'banter', $2, $3, '🔥', $4, $5) on conflict do nothing`,
+              [me, `fstreak:${s.days}:${other}`, `${s.days}-day streak`, tier, `With ${names.get(other) ?? "a friend"}: something every day for ${s.days} days.`]);
+            void recordInbox([me], { kind: "friends", tag: `fstreak:${other}`, title: `🔥 ${s.days} days in a row with ${names.get(other) ?? "a friend"}!`, body: "You've both shown up every day. A new trophy is in your case.", url: { banter: `/chats/dm/${other}`, wordle: "/", lingora: "/friends" } });
+          }
+        }
+      }
+      // Evening: one of you has been active today, the other hasn't, and there's a streak to lose.
+      if (evening && s.days >= 3 && s.aToday !== s.bToday) {
+        const late = s.aToday ? b : a, other = s.aToday ? a : b;
+        const [won] = await query(`insert into ops.friend_streak_marks (user_a, user_b, mark) values ($1, $2, $3) on conflict do nothing returning 1`, [x, y, `risk:${today}:${late}`]);
+        if (won) void recordInbox([late], { kind: "friends", tag: `fstreak:${other}`, title: `🔥 Your ${s.days}-day streak with ${names.get(other) ?? "a friend"} ends tonight`, body: "They've played today. Do anything in Wordle, Lingora or Banter to keep it going.", url: { banter: `/chats/dm/${other}`, wordle: "/daily", lingora: "/" } });
+      }
+    }
+  } catch (err: any) {
+    original.warn("[ops] Friend streak tick:", err?.message);
+  }
 }

@@ -1,6 +1,6 @@
 import type { Hono } from 'hono'
 import { fail, rateLimit, requireUser, type Env } from './http'
-import { claimTrio, crewView, recapFor, setCrewWars, todayFor } from './ops'
+import { claimTrio, crewView, friendStreaks, recapFor, setCrewWars, todayFor } from './ops'
 import { crewStudyRoom } from './study'
 
 /* Crews (server/ops.ts): your Wordle clan, its weekly score across the apps, and crew wars. */
@@ -12,6 +12,8 @@ export function registerCrewRoutes(app: Hono<Env>) {
     return c.json(r)
   })
   // Your day across the three apps, and the daily trio reward.
+  // Your streak with each friend (days in a row you've both done something).
+  app.get('/friend-streaks', requireUser, async (c) => c.json(await friendStreaks(c.get('userId'))))
   app.get('/today', requireUser, async (c) => c.json(await todayFor(c.get('userId'))))
   app.post('/today/claim', requireUser, async (c) => {
     const r = await claimTrio(c.get('userId'))

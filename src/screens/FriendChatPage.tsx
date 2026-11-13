@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { Avatar, ChatPanel } from '../components/chat/ChatPanel'
 import { Icon } from '../components/Icon'
 import { NameTag } from '../components/NameTag'
+import { StreakBadge } from '../components/StreakBadge'
 import { ProfileLink } from '../components/ProfileLink'
 import { onlineText, timeAgo } from '../lib/time'
 import { GROUP_NAME_MAX, MAX_GROUP_MEMBERS, type GroupSummary } from '../social/chat'
@@ -37,6 +38,7 @@ export function FriendChatPage() {
             <span className="grow person-text">
               <ProfileLink id={friend.id}>
                 <NameTag name={friend.username} nameColor={friend.nameColor} title={friend.title} />
+                <StreakBadge friendId={friend.id} />
               </ProfileLink>
               <span className={`small ${friend.online ? 'c-success' : 'muted'}`}>
                 {friend.online ? onlineText(friend) : friend.lastSeen ? `Last online ${timeAgo(friend.lastSeen)}` : 'Offline'}
