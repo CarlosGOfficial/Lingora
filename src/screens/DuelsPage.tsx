@@ -110,7 +110,7 @@ export function DuelsPage() {
       </div>
 
       <section className="stack-sm">
-        <div className="row">
+        <div className="row wrap-head">
           <h3 className="grow">Challenge a friend</h3>
           <div className="seg" role="radiogroup" aria-label="Words">
             {(['starter', 'core', 'all'] as const).map((t) => (

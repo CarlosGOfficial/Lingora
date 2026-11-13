@@ -935,6 +935,7 @@ input[type='range'] { accent-color: var(--accent); }
 /* Page header */
 .page-header { display: flex; align-items: center; gap: 16px; }
 .page-header h1 { margin: 0; }
+.page-header > .grow { flex: 1; min-width: 0; }
 .page-header p { margin: 2px 0 0; max-width: 60ch; }
 .page-icon {
   display: grid; place-items: center; width: 52px; height: 52px; flex-shrink: 0; border-radius: 16px;
@@ -1686,7 +1687,9 @@ input[type='range'] { accent-color: var(--accent); }
 }
 
 /* ---------- Announcements from the admin dashboard ---------- */
-.announcement-wrap { position: fixed; inset: 8px 0 auto; z-index: 120; display: flex; justify-content: center; padding: 0 12px; pointer-events: none; }
+.announcement-wrap { position: fixed; inset: auto 0 calc(84px + env(safe-area-inset-bottom)); z-index: 120; display: flex; justify-content: center; padding: 0 12px; pointer-events: none; }
+/* Bottom corner on wider screens, clear of the top bar and page headers. */
+@media (min-width: 861px) { .announcement-wrap { inset: auto 16px 16px auto; justify-content: flex-end; padding: 0; } }
 .announcement { pointer-events: auto; display: flex; align-items: flex-start; gap: 8px; max-width: 560px; padding: 8px 12px; border-radius: 16px; border: 1px solid var(--glass-border); background: var(--surface); box-shadow: var(--shadow-lg); font-size: .9rem; }
 .announcement p { margin: 0; flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .announcement svg { flex-shrink: 0; margin-top: 2px; }
@@ -1924,8 +1927,13 @@ a.part:hover { outline: 2px solid var(--accent); }
 /* The search button (Ctrl/⌘+K palette) is for keyboards; on narrow phones the top bar needs the room. */
 @media (max-width: 520px) { .palette-btn { display: none; } }
 @media (max-width: 420px) {
-  .topstat { padding: 4px 6px; }
-  .topbar .icon-btn { width: 34px; height: 34px; }
+  .topbar { padding: 10px 10px; gap: 4px; }
+  .lang-switch, .topbar-stats { gap: 3px; }
+  .lang-chip { width: 30px; height: 30px; font-size: .8rem; }
+  .topstat { padding: 3px 5px; font-size: .8rem; gap: 2px; }
+  .topstat svg { width: 14px; height: 14px; }
+  .topbar .icon-btn { width: 30px; height: 30px; }
+  .topbar .icon-btn svg { width: 18px; height: 18px; }
 }
 
 /* ---------- Podcasts ---------- */
@@ -1972,3 +1980,7 @@ a.part:hover { outline: 2px solid var(--accent); }
   .offline-pill { top: auto; bottom: calc(78px + env(safe-area-inset-bottom)); }
   @keyframes pill-in { from { opacity: 0; transform: translate(-50%, 8px); } }
 }
+
+/* A heading with controls beside it: the controls wrap below instead of squeezing the heading. */
+.row.wrap-head { flex-wrap: wrap; }
+.row.wrap-head > h3 { min-width: 140px; }

@@ -36,7 +36,7 @@ export function RecapPage() {
   return (
     <div className="stack" data-testid="recap-page">
       <PageHeader icon="star" title="Your recap" subtitle="Your month across Lingora, Wordle and Banter."
-        right={<select className="text-input" value={period} onChange={(e) => navigate(`/recap/${e.target.value}`)} aria-label="Month">{periods.map((p) => <option key={p} value={p}>{label(p)}</option>)}</select>} />
+        right={<select className="text-input" style={{ width: 'auto', flex: 'none' }} value={period} onChange={(e) => navigate(`/recap/${e.target.value}`)} aria-label="Month">{periods.map((p) => <option key={p} value={p}>{label(p)}</option>)}</select>} />
       {error && <div className="cta-card calm" role="alert">{error}</div>}
       {note && <p className="small muted" role="status">{note}</p>}
       {recap ? <RecapStory key={period} recap={recap} onSend={() => api.friends(dayKey()).then((d) => setFriends(d.friends), (e) => setNote(e.message))} /> : !error && <p className="muted">Loading…</p>}

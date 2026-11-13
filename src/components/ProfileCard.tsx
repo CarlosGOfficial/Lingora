@@ -83,12 +83,13 @@ export function ProfileCard({ profileKey, text, app, children }: { profileKey: s
         {d.crew && <span style={{ position: "absolute", right: 12, top: 12, padding: "3px 10px", borderRadius: 999, fontSize: 12, fontWeight: 800, color: "#fff", background: "rgba(0,0,0,.35)", backdropFilter: "blur(6px)" }}>{d.crew.emoji} {d.crew.name} [{d.crew.tag}]</span>}
       </div>
       <div style={{ padding: "0 18px 18px" }}>
-        <div style={{ display: "flex", alignItems: "flex-end", gap: "10px 14px", marginTop: -30, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "10px 14px", marginTop: -30, flexWrap: "wrap", position: "relative", zIndex: 1 }}>
           <div style={{ position: "relative", width: 84, height: 84, borderRadius: 999, border: `4px solid ${d.accent}`, background: d.avatar ? `center/cover url("${d.avatar}")` : `linear-gradient(135deg, ${d.accent}, ${d.accent}99)`, display: "grid", placeItems: "center", color: "#fff", fontWeight: 900, fontSize: 32, flexShrink: 0, boxShadow: "0 8px 24px -10px rgba(0,0,0,.4)" }}>
             {!d.avatar && d.name.slice(0, 1).toUpperCase()}
             {d.online && <span style={{ position: "absolute", right: 2, bottom: 2, width: 16, height: 16, borderRadius: 99, background: "#22c55e", border: "3px solid Canvas" }} />}
           </div>
-          <div style={{ minWidth: 150, flex: "1 1 180px", paddingBottom: 4 }}>
+          {/* Starts below the banner (the avatar overlaps it by 30px), however many lines it takes. */}
+          <div style={{ minWidth: 150, flex: "1 1 180px", paddingTop: 36 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900, lineHeight: 1.15, overflowWrap: "anywhere" }} data-testid="profile-name">{d.name}</h2>
               {d.pronouns && <span style={{ fontSize: 12.5, opacity: 0.65 }}>{d.pronouns}</span>}
@@ -100,7 +101,7 @@ export function ProfileCard({ profileKey, text, app, children }: { profileKey: s
             </div>
           </div>
           {d.mine && (
-            <div style={{ display: "flex", gap: 6, paddingBottom: 4, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 6, paddingTop: 36, flexWrap: "wrap" }}>
               <button type="button" onClick={() => setEditing(true)} data-testid="profile-edit" style={btn(d.accent, true)}>{T("pc.edit", "Edit profile")}</button>
               <button type="button" onClick={() => setPw(true)} data-testid="profile-password" style={btn(d.accent, false)}>{T("pc.password", "Password")}</button>
             </div>

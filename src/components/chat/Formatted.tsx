@@ -38,6 +38,12 @@ function CustomEmoji({ name, image, banter }: { name: string; image: string; ban
   return <img className="custom-emoji" src={`${banter}/api/emoji-images/${image}`} alt={`:${name}:`} title={`:${name}:`} draggable={false} onError={() => setBroken(true)} />
 }
 
+/** A reaction: a normal emoji, or a Banter custom one (<:name:id>). */
+export function EmojiGlyph({ emoji, banter }: { emoji: string; banter?: string }) {
+  const m = /^<:([a-z0-9_]{2,32}):([0-9a-f-]{36})>$/.exec(emoji)
+  return m ? <CustomEmoji name={m[1]} image={m[2]} banter={banter?.replace(/\/+$/, '')} /> : <>{emoji}</>
+}
+
 const RULES: Rule[] = [
   { re: /<:([a-z0-9_]{2,32}):([0-9a-f-]{36})>/, render: (m, k, c) => <CustomEmoji key={k} name={m[1]} image={m[2]} banter={c.banter} /> },
   { re: /`([^`\n]+)`/, render: (m, k) => <code key={k} className="inline-code">{m[1]}</code> },

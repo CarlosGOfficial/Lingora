@@ -115,16 +115,26 @@ app.post('/auth/signup', async (c) => {
   return c.json(await account(rows[0].id as string))
 })
 
+// Wrong passwords: 10 per account from one network, and 50 in all from one network. Only
+// failures count, keyed by both, so a class or family on one network isn't locked out together.
+const loginFails = new FailureLimiter(10, 900_000)
+const loginFailsPerIp = new FailureLimiter(50, 900_000)
+
 app.post('/auth/login', async (c) => {
-  rateLimit(c, 'login', 10, 900_000, 'Too many failed attempts. Try again in 15 minutes.')
   const body = await c.req.json().catch(() => ({}))
   const username = str(body.username).trim()
   const password = str(body.password)
+  const ip = clientIp(c), key = `${ip}|${username.toLowerCase()}`
+  if (loginFails.blocked(key) || loginFailsPerIp.blocked(ip)) fail(429, 'Too many failed attempts. Try again in 15 minutes.')
   const rows = username ? await db()`select id, password_hash from users where lower(username) = lower(${username})` : []
   const stored = rows[0]?.password_hash as string | null | undefined
   // Hash even when there's no match, so timing doesn't reveal which usernames exist.
   const ok = stored ? await verifyPassword(password, stored) : (await hashPassword(password), false)
-  if (!ok) fail(401, 'Wrong username or password.')
+  if (!ok) {
+    loginFails.fail(key)
+    loginFailsPerIp.fail(ip)
+    fail(401, 'Wrong username or password.')
+  }
   await startSession(c, rows[0].id as string)
   return c.json(await account(rows[0].id as string))
 })

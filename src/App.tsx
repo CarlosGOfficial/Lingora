@@ -8,7 +8,7 @@ import { PlacementPage } from './screens/PlacementPage'
 import { PodcastPlayer, PodcastsPage } from './screens/PodcastsPage'
 import { AnnouncementBanner } from './components/AnnouncementBanner'
 import { Fragment, useEffect, type ReactNode } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { CommandPalette } from './components/CommandPalette'
 import { Shell } from './components/Shell'
 import { ConversationPage } from './screens/ConversationPage'
@@ -89,6 +89,11 @@ export function App() {
   )
 }
 
+function BackToRequested() {
+  const from = (useLocation().state as { from?: string } | null)?.from
+  return <Navigate to={from && from.startsWith('/') && !from.startsWith('//') ? from : '/'} replace />
+}
+
 /** Ctrl/⌘+K: jump anywhere in Lingora, Wordle Unlimited or Banter. */
 function PaletteHost() {
   const navigate = useNavigate()
@@ -149,6 +154,10 @@ function MainApp() {
           <Route path="/goals" element={<GoalsPage />} />
           <Route path="/themes" element={<ThemeStudioPage />} />
         </Route>
+        {/* Signed in while on the sign-in page (e.g. an existing session from Banter or Wordle):
+            carry on to the page that was asked for. */}
+        <Route path="/login" element={<BackToRequested />} />
+        <Route path="/signup" element={<BackToRequested />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

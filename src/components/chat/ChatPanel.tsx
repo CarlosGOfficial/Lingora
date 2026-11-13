@@ -34,7 +34,7 @@ import { api } from '../../sync/api'
 import { Icon } from '../Icon'
 import { ReportDialog, type ReportTarget } from '../ReportDialog'
 import { ProfileLink } from '../ProfileLink'
-import { Formatted, mentions } from './Formatted'
+import { EmojiGlyph, Formatted, mentions } from './Formatted'
 import { useAppLinks } from '../../social/apps'
 import { useStore } from '../../store/useStore'
 
@@ -489,6 +489,7 @@ export function ChatPanel({ kind, chat, meId, person, group, readers, placeholde
   placeholder: string
   emptyText?: string
 }) {
+  const links = useAppLinks()
   const messages = chat.messages ?? []
   const myName = useStore((st) => st.account?.username ?? null)
   const [menu, setMenu] = useState<MenuState | null>(null)
@@ -620,7 +621,7 @@ export function ChatPanel({ kind, chat, meId, person, group, readers, placeholde
                     <div className="reaction-row">
                       {m.reactions.map((r) => (
                         <button type="button" key={r.emoji} className={`reaction-chip ${r.mine ? 'mine' : ''}`} title={r.userIds.map(nameOf).join(', ')} onClick={() => chat.react(m.id, r.emoji)}>
-                          {r.emoji}
+                          <EmojiGlyph emoji={r.emoji} banter={links?.banterUrl} />
                           {r.count > 1 && <b>{r.count}</b>}
                         </button>
                       ))}

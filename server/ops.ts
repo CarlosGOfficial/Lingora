@@ -324,8 +324,17 @@ export async function startOps(app: OpsApp, run: OpsQuery) {
   if (started) return;
   started = true;
   thisApp = app;
-  for (const statement of OPS_SCHEMA) {
-    try { await run(statement); } catch (err: any) { original.warn("[ops] Setting up the ops tables failed:", err?.message); return; }
+  // The database can be briefly unreachable at deploy time (a cold start): keep trying, or
+  // profiles, trophies, Today and streaks would stay off until the next restart.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      for (const statement of OPS_SCHEMA) await run(statement);
+      break;
+    } catch (err: any) {
+      const wait = Math.min(60_000, 2_000 * 2 ** Math.min(attempt, 5));
+      original.warn(`[ops] Setting up the ops tables failed (${err?.message}); retrying in ${wait / 1000}s.`);
+      await new Promise((r) => setTimeout(r, wait).unref?.());
+    }
   }
   query = run;
   markReady();
