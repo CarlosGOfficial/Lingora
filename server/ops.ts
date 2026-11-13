@@ -1532,3 +1532,145 @@ export async function friendStreakTick(now = new Date()) {
     original.warn("[ops] Friend streak tick:", err?.message);
   }
 }
+
+/* ---------- One profile for all three apps ---------- */
+
+/*
+ * Banter's profile (chat.profiles.style: banner, accent, pronouns, links, a word in
+ * tiles; users.bio) is the profile everywhere. profileCard() puts it together with each
+ * app's numbers for any app to show (components/ProfileCard.tsx), and saveProfile() lets
+ * any app edit the shared parts. Banter's studio keeps the full editor (banner images,
+ * nameplates, status, card background).
+ * PROFILE_BANNERS must match BANNER_PRESETS in Banter's shared/profile.ts (check:shared).
+ */
+export const PROFILE_BANNERS: Record<string, string> = {
+  grape: "linear-gradient(120deg, #7c3aed 0%, #c026d3 100%)",
+  sunrise: "linear-gradient(120deg, #f59e0b 0%, #ef4444 60%, #c026d3 100%)",
+  unlimited: "linear-gradient(110deg, #7c3aed 0%, #f59e0b 100%)",
+  tiles: "repeating-linear-gradient(90deg, #6aaa64 0 40px, #c9b458 40px 80px, #787c7e 80px 120px)",
+  meadow: "linear-gradient(120deg, #16a34a 0%, #6aaa64 50%, #c9b458 100%)",
+  ocean: "linear-gradient(120deg, #0ea5e9 0%, #6366f1 100%)",
+  midnight: "linear-gradient(120deg, #0f172a 0%, #312e81 60%, #7c3aed 100%)",
+  candy: "linear-gradient(120deg, #f472b6 0%, #a78bfa 50%, #60a5fa 100%)",
+  ember: "radial-gradient(circle at 20% 120%, #f97316 0%, #b91c1c 45%, #1c1917 100%)",
+  mint: "linear-gradient(120deg, #34d399 0%, #22d3ee 100%)",
+};
+export const PROFILE_BIO_MAX = 160, PROFILE_PRONOUNS_MAX = 24, PROFILE_LINKS_MAX = 3;
+const HEX = /^#[0-9a-fA-F]{6}$/;
+
+export type ProfileCardData = {
+  id: string; name: string; avatar: string | null; mine: boolean; friend: boolean;
+  bio: string | null; pronouns: string; accent: string; banner: { kind: "preset"; id: string } | { kind: "css"; css: string };
+  word: { letters: string; colors: string[] } | null; links: { label: string; url: string }[];
+  joined: string | null; lastSeen: string | null; online: boolean;
+  wordle: { played: number; won: number; dailyStreak: number; rating: number | null } | null;
+  lingora: { langs: { lang: string; xp: number }[]; streak: number } | null;
+  banter: { servers: number; mutualServers: number } | null;
+  trophies: { name: string; icon: string; tier: string }[];
+  crew: { name: string; tag: string; emoji: string } | null;
+  streak: number;
+  urls: Record<OpsApp, string | null>;
+};
+
+const gradient = (g: any) => Array.isArray(g?.colors) && g.colors.every((c: unknown) => typeof c === "string" && HEX.test(c)) && Number.isFinite(g.angle)
+  ? `linear-gradient(${Number(g.angle)}deg, ${g.colors.join(", ")})` : null;
+
+/** Someone's profile for `viewerId` (null if they've blocked each other or there's no such person). */
+export async function profileCard(key: string, viewerId: string): Promise<ProfileCardData | null> {
+  if (!query) return null;
+  const [u] = await query(
+    `select u.id, coalesce(u.username, u.first_name, 'Player') as name, u.profile_image_url, u.bio, u.rounds_played, u.rounds_won, u.daily_streak,
+       u.created_at, u.last_seen_at, p.style
+     from users u left join chat.profiles p on p.user_id = u.id
+     where u.id = $1 or lower(u.username) = lower($1) limit 1`, [key]).catch(() => []);
+  if (!u) return null;
+  const [blocked] = await query(`select 1 from chat.blocks where (user_id = $1 and blocked_id = $2) or (user_id = $2 and blocked_id = $1) limit 1`, [u.id, viewerId]).catch(() => []);
+  if (blocked) return null;
+  const st = (u.style ?? {}) as any;
+  const show = { wordle: st.show?.wordle !== false, lingora: st.show?.lingora !== false, achievements: st.show?.achievements !== false, servers: st.show?.servers !== false, lastSeen: st.show?.lastSeen !== false };
+  const mine = u.id === viewerId;
+  const [friendRow, rating, lingora, lDays, servers, mutual, trophies, crew, streaks, urls] = await Promise.all([
+    query(`select 1 from friendships where status = 'accepted' and ((requester_id = $1 and addressee_id = $2) or (requester_id = $2 and addressee_id = $1)) limit 1`, [u.id, viewerId]).catch(() => []),
+    query(`select rating from ranked_ratings where user_id = $1 order by season desc limit 1`, [u.id]).catch(() => []),
+    query(`select lang, sum(xp)::int as xp from lingora_xp_events where user_id = $1 group by lang order by 2 desc`, [u.id]).catch(() => []),
+    query(`select distinct to_char(day, 'YYYY-MM-DD') as day from lingora_xp_events where user_id = $1 order by 1 desc limit 400`, [u.id]).catch(() => []),
+    query(`select count(*)::int as n from chat.members where user_id = $1`, [u.id]).catch(() => [{ n: 0 }]),
+    query(`select count(*)::int as n from chat.members a join chat.members b on a.server_id = b.server_id where a.user_id = $1 and b.user_id = $2`, [u.id, viewerId]).catch(() => [{ n: 0 }]),
+    trophyCase(u.id, viewerId).catch(() => null),
+    query(`select c.name, c.tag, c.emoji from clan_members m join clans c on c.id = m.clan_id where m.user_id = $1 limit 1`, [u.id]).catch(() => []),
+    mine ? Promise.resolve([] as FriendStreak[]) : friendStreaks(viewerId).catch(() => [] as FriendStreak[]),
+    appUrls(),
+  ]);
+  const bannerCss = st.banner?.kind === "color" && HEX.test(st.banner.color) ? `linear-gradient(120deg, ${st.banner.color}, ${st.banner.color})`
+    : st.banner?.kind === "gradient" ? gradient(st.banner.gradient) : null;
+  const preset = st.banner?.kind === "preset" && PROFILE_BANNERS[st.banner.id] ? st.banner.id : null;
+  const accent = typeof st.accent === "string" && HEX.test(st.accent) ? st.accent : "#7c3aed";
+  const pinned = trophies ? (trophies.pinned.length ? trophies.pinned.map((id) => trophies.trophies.find((x) => x.id === id)).filter(Boolean) as Trophy[] : trophies.trophies.slice(0, 6)) : [];
+  const online = !!u.last_seen_at && Date.now() - new Date(u.last_seen_at).getTime() < 5 * 60_000;
+  return {
+    id: u.id, name: u.name, mine, friend: !!friendRow.length,
+    avatar: typeof u.profile_image_url === "string" && (u.profile_image_url.startsWith("/api/avatars/") || /^https:\/\//.test(u.profile_image_url)) ? u.profile_image_url : null,
+    bio: u.bio ?? null, pronouns: typeof st.pronouns === "string" ? st.pronouns.slice(0, PROFILE_PRONOUNS_MAX) : "", accent,
+    banner: preset ? { kind: "preset", id: preset } : { kind: "css", css: bannerCss ?? `linear-gradient(120deg, ${accent}, ${accent}aa)` },
+    word: st.word && typeof st.word.letters === "string" ? { letters: st.word.letters, colors: Array.isArray(st.word.colors) ? st.word.colors : [] } : null,
+    links: Array.isArray(st.links) ? st.links.filter((l: any) => typeof l?.url === "string" && /^https?:\/\//.test(l.url)).slice(0, PROFILE_LINKS_MAX).map((l: any) => ({ label: String(l.label ?? "").slice(0, 30), url: String(l.url).slice(0, 300) })) : [],
+    joined: u.created_at ? new Date(u.created_at).toISOString() : null,
+    lastSeen: show.lastSeen && u.last_seen_at ? new Date(u.last_seen_at).toISOString() : null,
+    online: show.lastSeen && online,
+    wordle: show.wordle ? { played: u.rounds_played ?? 0, won: u.rounds_won ?? 0, dailyStreak: u.daily_streak ?? 0, rating: rating[0]?.rating ?? null } : null,
+    lingora: show.lingora && lingora.length ? { langs: lingora.map((r) => ({ lang: r.lang, xp: r.xp })), streak: dayStreak(lDays.map((r) => r.day)) } : null,
+    banter: show.servers ? { servers: servers[0]?.n ?? 0, mutualServers: mine ? 0 : mutual[0]?.n ?? 0 } : null,
+    trophies: show.achievements ? pinned.slice(0, 6).map((x) => ({ name: x.name, icon: x.icon, tier: x.tier })) : [],
+    crew: crew[0] ? { name: crew[0].name, tag: crew[0].tag, emoji: crew[0].emoji } : null,
+    streak: streaks.find((x) => x.friendId === u.id)?.days ?? 0,
+    urls,
+  };
+}
+
+/** Edit the shared parts of your profile from any app: { bio, pronouns, accent, banner (a preset id), links }. */
+export async function saveProfile(userId: string, body: any): Promise<{ ok: true } | { error: string }> {
+  if (!query) return { error: "Not available right now." };
+  const patch: Record<string, unknown> = {};
+  if (body?.pronouns !== undefined) patch.pronouns = String(body.pronouns ?? "").replace(/\s+/g, " ").trim().slice(0, PROFILE_PRONOUNS_MAX);
+  if (body?.accent !== undefined) { if (!HEX.test(String(body.accent))) return { error: "Pick a colour." }; patch.accent = String(body.accent).toLowerCase(); }
+  if (body?.banner !== undefined) { if (!PROFILE_BANNERS[String(body.banner)]) return { error: "Pick a banner." }; patch.banner = { kind: "preset", id: String(body.banner) }; }
+  if (body?.links !== undefined) {
+    if (!Array.isArray(body.links) || body.links.length > PROFILE_LINKS_MAX) return { error: `Up to ${PROFILE_LINKS_MAX} links.` };
+    const links = [];
+    for (const l of body.links) {
+      const url = String(l?.url ?? "").trim();
+      if (!url) continue;
+      if (!/^https?:\/\/[^\s]+\.[^\s]+$/.test(url) || url.length > 300) return { error: "Links must start with http:// or https://." };
+      links.push({ label: String(l?.label ?? "").trim().slice(0, 30) || new URL(url).hostname, url });
+    }
+    patch.links = links;
+  }
+  if (Object.keys(patch).length) {
+    await query(`insert into chat.profiles (user_id, style, updated_at) values ($1, $2::jsonb, now())
+      on conflict (user_id) do update set style = chat.profiles.style || excluded.style, updated_at = now()`, [userId, JSON.stringify(patch)]);
+  }
+  if (body?.bio !== undefined) {
+    const bio = String(body.bio ?? "").replace(/\s+/g, " ").trim().slice(0, PROFILE_BIO_MAX);
+    await query(`update users set bio = $2, updated_at = now() where id = $1`, [userId, bio || null]);
+  }
+  return { ok: true };
+}
+
+/** Change your password from any app (the same hash format all three use). */
+export async function changePassword(userId: string, current: unknown, next: unknown): Promise<{ ok: true } | { error: string }> {
+  if (!query) return { error: "Not available right now." };
+  const pw = String(next ?? "");
+  if (pw.length < 8 || pw.length > 200) return { error: "Use at least 8 characters." };
+  const [u] = await query(`select password_hash from users where id = $1`, [userId]);
+  if (!u) return { error: "Not signed in." };
+  const { scrypt, randomBytes, timingSafeEqual } = await import("node:crypto");
+  const hash = (password: string, salt: string) => new Promise<Buffer>((res, rej) => scrypt(password, salt, 64, (e, k) => (e ? rej(e) : res(k))));
+  if (u.password_hash) {
+    const [salt, key] = String(u.password_hash).split(":");
+    const given = await hash(String(current ?? ""), salt);
+    if (!key || key.length !== given.length * 2 || !timingSafeEqual(Buffer.from(key, "hex"), given)) return { error: "Your current password isn't right." };
+  }
+  const salt = randomBytes(16).toString("hex");
+  await query(`update users set password_hash = $2, updated_at = now() where id = $1`, [userId, `${salt}:${(await hash(pw, salt)).toString("hex")}`]);
+  return { ok: true };
+}

@@ -2,16 +2,13 @@ import { ReportDialog } from '../components/ReportDialog'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
-import { NameTag } from '../components/NameTag'
 import { COURSES } from '../content'
 import { dayKey } from '../lib/date'
-import { onlineText, timeAgo } from '../lib/time'
-import { BIO_MAX, type PublicProfile } from '../social/profile'
+import { type PublicProfile } from '../social/profile'
 import { refreshFriends } from '../social/useFriends'
-import { useAppLinks } from '../social/apps'
-import { Avatar } from '../components/chat/ChatPanel'
 import { api } from '../sync/api'
 import { TrophyCase } from '../components/TrophyCase'
+import { ProfileCard } from '../components/ProfileCard'
 
 /** Someone's public profile (opened from leaderboards, friend lists and chats). */
 export function UserProfilePage() {
@@ -41,35 +38,11 @@ export function UserProfilePage() {
   if (error) return <div className="stack">{back}<p className="error">{error}</p></div>
   if (!p) return <div className="stack">{back}<p className="muted">Loading…</p></div>
 
-  const joined = p.joinedAt ? new Date(p.joinedAt).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : null
-  const look = p.banter
   return (
     <div className="stack profile-view">
       {back}
-      {look && (
-        <div className="banter-banner" style={'image' in look.banner ? { backgroundImage: `url(${look.banner.image})` } : { background: look.banner.css }}>
-          <span className="banter-banner-tag">Banter profile</span>
-        </div>
-      )}
-      <section className={`profile-card ${look ? 'with-banner' : ''}`} style={look ? { ['--profile-accent' as string]: look.accent, ...(look.card ? { backgroundImage: look.card } : {}) } : undefined}>
-        <Avatar person={p} online={p.online} size="big" />
-        <div className="grow person-text">
-          <span className="row tight">
-            <NameTag name={p.username} nameColor={p.nameColor} title={p.title} />
-            {p.isAdmin && <span className="admin-badge">ADMIN</span>}
-          </span>
-          <span className={`small ${p.online ? 'c-success' : 'muted'}`}>{p.online ? onlineText(p, 'Online now') : p.lastSeen ? `Last online ${timeAgo(p.lastSeen)}` : 'Offline'}</span>
-          {look?.status && <span className="small banter-status">{look.status.emoji} {look.status.text}</span>}
-          <span className="small muted">
-            {look?.pronouns && `${look.pronouns} · `}
-            {joined && `Joined ${joined} · `}
-            {p.friends} {p.friends === 1 ? 'friend' : 'friends'}
-          </span>
-        </div>
-        <BanterLink username={p.username} on={!!look} />
-      </section>
+      <ProfileCard key={p.id} profileKey={p.id} app="lingora" />
       <Actions p={p} reload={load} />
-      <Bio p={p} onSaved={load} />
 
       {p.lingora ? (
         <>
@@ -255,69 +228,4 @@ function Actions({ p, reload }: { p: PublicProfile; reload: () => Promise<void> 
   )
 }
 
-/** Your bio is editable here (and in Wordle Unlimited — it's the same one). */
-function Bio({ p, onSaved }: { p: PublicProfile; onSaved: () => Promise<void> }) {
-  const self = p.relation === 'self'
-  const [editing, setEditing] = useState(false)
-  const [text, setText] = useState(p.bio ?? '')
-  const [error, setError] = useState('')
-  if (editing)
-    return (
-      <form
-        className="stack-sm"
-        onSubmit={async (e) => {
-          e.preventDefault()
-          try {
-            await api.saveBio(text)
-            setEditing(false)
-            await onSaved()
-          } catch (err) {
-            setError((err as Error).message)
-          }
-        }}
-      >
-        <textarea className="text-input" rows={3} maxLength={BIO_MAX} value={text} onChange={(e) => setText(e.target.value)} placeholder="Say something about yourself — what you’re learning, why…" autoFocus />
-        <div className="row">
-          <span className="small muted grow">
-            {text.length}/{BIO_MAX} · shared with Wordle Unlimited
-          </span>
-          <button type="button" className="btn btn-ghost small" onClick={() => setEditing(false)}>
-            Cancel
-          </button>
-          <button className="btn btn-primary small">
-            <Icon name="check" size={16} /> Save
-          </button>
-        </div>
-        {error && <p className="error small">{error}</p>}
-      </form>
-    )
-  if (!p.bio && !self) return null
-  return (
-    <div className="bio-row">
-      <p className={p.bio ? '' : 'muted'}>{p.bio || 'Add a short bio so friends know what you’re learning.'}</p>
-      {self && (
-        <button
-          className="icon-btn small"
-          aria-label="Edit bio"
-          onClick={() => {
-            setText(p.bio ?? '')
-            setEditing(true)
-          }}
-        >
-          <Icon name="pencil" size={14} />
-        </button>
-      )}
-    </div>
-  )
-}
 
-/** Their profile in Banter, where it can be customized (banner, status, colours). */
-function BanterLink({ username, on }: { username: string; on: boolean }) {
-  const links = useAppLinks()
-  if (!links?.banterUrl || !on) return null
-  return (
-    <a className="btn btn-ghost small" href={`${links.banterUrl}/u/${encodeURIComponent(username)}`} target="_blank" rel="noopener noreferrer">
-      View on Banter <Icon name="external" size={13} />
-    </a>
-  )
-}

@@ -82,7 +82,7 @@ export function Shell() {
             <Link to="/shop" className="topstat coin-stat" title="Coins — open the shop">
               <Icon name="coin" size={18} /> <span key={coins} className="bump">{coins.toLocaleString()}</span>
             </Link>
-            <button className="icon-btn" onClick={openPalette} aria-label="Search and jump" title="Search and jump (Ctrl+K)" data-testid="palette-button"><Icon name="search" size={20} /></button>
+            <button className="icon-btn palette-btn" onClick={openPalette} aria-label="Search and jump" title="Search and jump (Ctrl+K)" data-testid="palette-button"><Icon name="search" size={20} /></button>
             <HubBell />
             <ThemeMenu />
           </div>
