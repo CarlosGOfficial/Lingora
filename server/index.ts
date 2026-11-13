@@ -1,5 +1,6 @@
 import { STUDY_SCHEMA } from './study'
 import { DECKS_SCHEMA } from './decks'
+import { PODCASTS_SCHEMA } from './podcasts'
 import { SPEECH_SCHEMA } from './speech'
 import { DUELS_SCHEMA } from './duels'
 import { serve } from '@hono/node-server'
@@ -34,7 +35,7 @@ if (IS_PROD) {
 
 // The push table is shared with Banter and Wordle; make sure it exists.
 void ensurePushTable()
-void ensureEconomyTables([...GOALS_SCHEMA, ...DUELS_SCHEMA, ...STUDY_SCHEMA, ...DECKS_SCHEMA, ...SPEECH_SCHEMA])
+void ensureEconomyTables([...GOALS_SCHEMA, ...DUELS_SCHEMA, ...STUDY_SCHEMA, ...DECKS_SCHEMA, ...SPEECH_SCHEMA, ...PODCASTS_SCHEMA])
 // Shared ops tables, error tracking and heartbeat (server/ops.ts, the same in all three apps).
 const database = sql
 if (database) void startOps('lingora', (text, params) => database.query(text, params ?? []) as Promise<any[]>)

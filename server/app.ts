@@ -1,6 +1,7 @@
 import { registerCrewRoutes } from './crews'
 import { registerSpeechRoutes } from './speech'
 import { registerDeckRoutes } from './decks'
+import { registerPodcastRoutes } from './podcasts'
 import { registerTrophyRoutes } from './trophies'
 import { findLesson, findReading } from '../src/content'
 import { findStory } from '../src/content/stories'
@@ -312,6 +313,7 @@ registerBanterRoutes(app)
 registerGoalRoutes(app)
 registerTrophyRoutes(app)
 registerDeckRoutes(app)
+registerPodcastRoutes(app)
 registerSpeechRoutes(app)
 registerCrewRoutes(app)
 registerPushRoutes(app)

@@ -49,6 +49,13 @@ export function PracticePage() {
             <span className="muted small">Role-play real situations by typing or speaking, using only what you’ve learned.</span>
           </Link>
         )}
+        <Link to="/podcasts" className="mode-card" data-testid="podcasts-card">
+          <span className="mode-icon">
+            <Icon name="headphones" size={24} />
+          </span>
+          <strong>Listening · Podcasts</strong>
+          <span className="muted small">Short two-voice episodes made of words you know, with a live transcript and questions.</span>
+        </Link>
         <Link to="/decks" className="mode-card" data-testid="decks-card">
           <span className="mode-icon">
             <Icon name="layers" size={24} />

@@ -6,6 +6,7 @@ import type { TrophyCaseData } from '../components/TrophyCase'
 import type { ChatReply, ChatRequest } from '../chat/types'
 import type { CustomTheme } from '../theme/themes'
 import type { LangCode } from '../content/types'
+import type { Episode } from '../podcast/episode'
 import type { ChatBody, ChatKind, ChatMessage, GifResult, GroupSummary } from '../social/chat'
 import type { Notifications, PublicProfile } from '../social/profile'
 import type { GoalsView } from '../content/goals'
@@ -41,6 +42,8 @@ async function request<T>(path: string, init?: { method?: string; body?: unknown
 }
 
 export const api = {
+  podcasts: (lang: LangCode, unit: string) => request<{ canMake: boolean; episodes: Episode[] }>(`/podcasts?lang=${lang}&unit=${encodeURIComponent(unit)}`),
+  makePodcast: (lang: LangCode, unit: string) => request<Episode>('/podcasts', { body: { lang, unit } }),
   health: () => request<{ ok: boolean; db: boolean }>('/health'),
   me: () => request<Account>('/me'),
   signup: (body: { username: string; password: string }) => request<Account>('/auth/signup', { body }),

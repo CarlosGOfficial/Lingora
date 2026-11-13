@@ -5,6 +5,7 @@ import { DuelPage, DuelsPage } from './screens/DuelsPage'
 import { StudyPage, StudyRoomPage } from './screens/StudyPage'
 import { SeasonPage } from './screens/SeasonPage'
 import { PlacementPage } from './screens/PlacementPage'
+import { PodcastPlayer, PodcastsPage } from './screens/PodcastsPage'
 import { AnnouncementBanner } from './components/AnnouncementBanner'
 import { Fragment, useEffect, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
@@ -107,6 +108,7 @@ function MainApp() {
         <Route path="/unit-review/:unitId" element={<Remount param="unitId"><UnitReviewPage /></Remount>} />
         <Route path="/conversation" element={<ConversationPage />} />
         <Route path="/placement" element={<PlacementPage />} />
+        <Route path="/podcasts/:id" element={<Remount param="id"><PodcastPlayer /></Remount>} />
         <Route path="/section-test/:index" element={<Remount param="index"><SectionTestPage /></Remount>} />
         <Route path="/practice/:mode" element={<Remount param="mode"><PracticeSession /></Remount>} />
         <Route path="/decks/:id/learn" element={<Remount param="id"><DeckLearn /></Remount>} />
@@ -120,6 +122,7 @@ function MainApp() {
           <Route path="/trainer" element={<TrainerPage />} />
           <Route path="/characters" element={<CharactersPage />} />
           <Route path="/characters/:char" element={<Remount param="char"><CharacterPage /></Remount>} />
+          <Route path="/podcasts" element={<PodcastsPage />} />
           <Route path="/decks" element={<DecksPage />} />
           <Route path="/decks/new" element={<DeckEditor />} />
           <Route path="/decks/:id" element={<Remount param="id"><DeckPage /></Remount>} />
