@@ -50,7 +50,7 @@ export function buildDict(file: LookupFile): Dict {
     list.push(entry);
     byFirst.set(first, list);
   }
-  for (const list of byFirst.values()) list.sort((a, b) => b.text.length - a.text.length);
+  byFirst.forEach((list) => list.sort((a, b) => b.text.length - a.text.length));
   const chars = new Map<string, LookupEntry>();
   for (const [c, [reading, meaning]] of Object.entries(file.chars ?? {})) chars.set(c, { text: c, reading, meaning, itemId: null, lang: file.lang, char: true });
   return { lang: file.lang, byFirst, byWord, chars };
@@ -76,8 +76,9 @@ export function segment(text: string, dict: Dict, ptMin = 2): Token[] {
     const tokens: Token[] = [];
     const hits = new Set<string>();
     let last = 0;
-    for (const m of text.matchAll(LATIN_WORD)) {
-      const word = m[0], at = m.index ?? 0;
+    const re = new RegExp(LATIN_WORD.source, "g");
+    for (let m = re.exec(text); m; m = re.exec(text)) {
+      const word = m[0], at = m.index;
       const entry = word.length >= 3 ? dict.byWord.get(fold(word)) ?? null : null;
       if (!entry) continue;
       if (at > last) tokens.push({ text: text.slice(last, at), entry: null });
