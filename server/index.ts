@@ -20,6 +20,13 @@ root.route('/', app)
 root.all('/api/*', (c) => c.json({ error: 'Not found' }, 404))
 
 // In production one process serves both the API and the built frontend.
+// Word lookup data (scripts/build-lookup.ts) is public and read by Banter and Wordle.
+root.use('/lookup/*', async (c, next) => {
+  await next()
+  c.header('Access-Control-Allow-Origin', '*')
+  c.header('Cache-Control', 'public, max-age=3600')
+})
+
 if (IS_PROD) {
   root.use('*', serveStatic({ root: './dist' }))
   root.get('*', serveStatic({ path: './dist/index.html' }))

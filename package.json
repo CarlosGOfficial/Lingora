@@ -10,7 +10,7 @@
     "dev": "vite",
     "db:migrate": "tsx server/migrate.ts",
     "start": "tsx server/index.ts --prod",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsx scripts/build-lookup.ts && tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

@@ -6,3 +6,4 @@ dist
 *.log
 # Local editor/agent settings
 .claude/
+public/lookup/
