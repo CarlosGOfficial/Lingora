@@ -41,6 +41,7 @@ import { useStore } from './store/useStore'
 import { NotificationsWatcher } from './social/NotificationsWatcher'
 import { usePresence } from './social/useFriends'
 import { Toaster } from './components/Toaster'
+import { OfflinePill } from './components/OfflinePill'
 import { refreshPush } from './lib/push'
 import { adoptServerSession, startAutoSync } from './sync/sync'
 
@@ -100,6 +101,7 @@ function MainApp() {
     <>
       <NotificationsWatcher />
       <Toaster />
+      <OfflinePill />
       <PaletteHost />
       <Routes>
         <Route path="/lesson/:lessonId" element={<Remount param="lessonId"><LessonPage /></Remount>} />

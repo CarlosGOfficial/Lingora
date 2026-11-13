@@ -9,6 +9,8 @@ import { COURSES, LANG_CODES } from '../content'
 import { dueCards, liveStreak, todayXp, useStore } from '../store/useStore'
 import { Icon, type IconName } from './Icon'
 import { useAppLinks } from '../social/apps'
+import { OfflineNotice } from './OfflinePill'
+import { useInstallPrompt } from '../lib/offline'
 
 const NAV: { to: string; label: string; icon: IconName }[] = [
   { to: '/', label: 'Learn', icon: 'home' },
@@ -48,6 +50,7 @@ export function Shell() {
             </NavLink>
           ))}
         </nav>
+        <InstallApp />
         <OtherApps />
       </aside>
 
@@ -89,6 +92,7 @@ export function Shell() {
         </header>
         <main className="page">
           <div key={location.pathname} className="page-anim">
+            <OfflineNotice />
             <Outlet />
           </div>
         </main>
@@ -105,6 +109,21 @@ export function Shell() {
         ))}
       </nav>
     </div>
+  )
+}
+
+/** "Install Lingora" when the browser offers it: then it opens like an app and works offline. */
+function InstallApp() {
+  const install = useInstallPrompt()
+  if (!install) return null
+  return (
+    <button className="install-app" onClick={() => void install()} data-testid="install-app">
+      <Icon name="plus" size={16} />
+      <span>
+        <strong>Install Lingora</strong>
+        <span className="small muted">Works offline</span>
+      </span>
+    </button>
   )
 }
 

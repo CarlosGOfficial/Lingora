@@ -1956,3 +1956,17 @@ a.part:hover { outline: 2px solid var(--accent); }
 .podcast-review { display: grid; gap: 8px; padding: 0; list-style: none; }
 .podcast-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .podcast-speed { padding: 6px 8px; border-radius: 10px; border: 1px solid var(--glass-border); background: var(--surface); color: inherit; font: inherit; }
+
+/* ---------- Offline ---------- */
+.offline-pill { position: fixed; top: calc(10px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 90; display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; font-size: .8rem; font-weight: 700; color: #fff; background: rgb(30 41 59 / 92%); box-shadow: 0 8px 24px -10px rgb(0 0 0 / 50%); animation: pill-in .3s ease; white-space: nowrap; }
+.offline-dot { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; box-shadow: 0 0 0 3px rgb(245 158 11 / 30%); }
+@keyframes pill-in { from { opacity: 0; transform: translate(-50%, -8px); } }
+.offline-notice { display: flex; gap: 10px; align-items: flex-start; padding: 12px 16px; margin-bottom: 14px; border-radius: 16px; background: color-mix(in srgb, #f59e0b 14%, var(--surface)); border: 1px solid color-mix(in srgb, #f59e0b 40%, transparent); font-size: .9rem; }
+.install-app { display: flex; align-items: center; gap: 10px; margin: auto 12px 8px; padding: 10px 12px; border-radius: 14px; border: 1px dashed color-mix(in srgb, var(--accent) 50%, transparent); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.install-app span { display: flex; flex-direction: column; }
+.install-app:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.install-app + .other-apps { margin-top: 0; }
+@media (max-width: 720px) {
+  .offline-pill { top: auto; bottom: calc(78px + env(safe-area-inset-bottom)); }
+  @keyframes pill-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+}

@@ -23,7 +23,7 @@ function localPrefs(): Prefs {
   }
 }
 
-const pending = (o: Outbox) => o.reviews.length + o.xp.length + o.completions.length + o.imports.length + o.purchases.length + o.claims.length
+export const pending = (o: Outbox) => o.reviews.length + o.xp.length + o.completions.length + o.imports.length + o.purchases.length + o.claims.length
 
 /** Push the outbox and replace local progress with the server's view. */
 export function syncNow(): Promise<void> {
@@ -31,6 +31,8 @@ export function syncNow(): Promise<void> {
   inFlight = (async () => {
     const s = useStore.getState()
     if (!s.account) return
+    // Offline: keep everything in the outbox; the 'online' event syncs it.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
     const sent = s.outbox
     try {
       const snap = await api.sync({ outbox: sent, prefs: localPrefs() })
@@ -208,10 +210,12 @@ export function startAutoSync(): () => void {
   })
   const onFocus = () => useStore.getState().account && void syncNow()
   window.addEventListener('focus', onFocus)
+  window.addEventListener('online', onFocus)
   return () => {
     clearTimeout(timer)
     unsub()
     window.removeEventListener('focus', onFocus)
+    window.removeEventListener('online', onFocus)
   }
 }
 
