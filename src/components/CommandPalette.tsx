@@ -30,6 +30,7 @@ export const PALETTE_PAGES: Record<PaletteApp, Page[]> = {
     { id: "archive", title: "Daily archive", path: "/daily/archive", emoji: "🗂️", keywords: "past days calendar" },
     { id: "adventure", title: "Adventure", path: "/adventure", emoji: "🗺️", keywords: "worlds levels stars solo" },
     { id: "packs", title: "Puzzle packs", path: "/packs", emoji: "🧩", keywords: "community word sets" },
+    { id: "sabotage", title: "Sabotage", path: "/sabotage", emoji: "🕵️", keywords: "party pick a word for your friends" },
     { id: "ranked", title: "Ranked", path: "/ranked", emoji: "⚔️", keywords: "1v1 rating ladder" },
     { id: "challenge", title: "Challenge a friend", path: "/challenge", emoji: "🎯", keywords: "send word" },
     { id: "clans", title: "Clans", path: "/clans", emoji: "🛡️", keywords: "crew team" },
